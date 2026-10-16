@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.pytest_cache/
+
+# Virtual environment
+.venv
+
+# Downloaded model weights (re-download with `uv run speech-to-text download`)
+models/*
+!models/.gitkeep
+
+# Audio inputs and generated transcripts
+data/input/*
+data/output/*
+!data/input/.gitkeep
+!data/output/.gitkeep

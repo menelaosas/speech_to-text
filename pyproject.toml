@@ -1,0 +1,33 @@
+[project]
+name = "speech-to-text"
+version = "0.1.0"
+description = "Local speech-to-text (m4a, mp3, wav...) using Cohere Transcribe 03-2026"
+readme = "README.md"
+authors = [
+    { name = "menelaosas", email = "menelaosasim@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "accelerate>=1.15.0",
+    "huggingface-hub>=2.2.0",
+    "librosa>=1.0.0",
+    "numpy>=2.5.4",
+    "protobuf>=7.36.2",
+    "sentencepiece>=0.2.2",
+    "soundfile>=0.14.0",
+    "torch>=2.8",
+    "tqdm>=4.70.1",
+    "transformers>=5.4.0",
+]
+
+[project.scripts]
+speech-to-text = "speech_to_text:main"
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
