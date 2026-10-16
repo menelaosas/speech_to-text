@@ -1,4 +1,22 @@
-from speech_to_text.greek import restore_final_sigma
+import pytest
+
+from speech_to_text.config import SIGMA_MODEL_DIR
+from speech_to_text.greek import SigmaRestorer, restore_final_sigma
+
+
+def test_auto_margin_leans_towards_sigma_when_model_dropped_it():
+    assert SigmaRestorer.auto_margin(["Σα ευχαριστώ για το χρόνο σα όμω"]) < 0
+    assert SigmaRestorer.auto_margin(["Σας ευχαριστώ για τον χρόνο σας, όμως της είπα"]) > 0
+
+
+@pytest.mark.skipif(not (SIGMA_MODEL_DIR / "config.json").exists(), reason="XLM-R model not downloaded")
+def test_lm_restorer_resolves_ambiguous_words():
+    restorer = SigmaRestorer(margin=-1.0)
+    out = restorer.restore(["Σα ευχαριστούμε πολύ για τη συνάντηση και το χρόνο σα. Η απόφαση τη κυβέρνηση."])[0]
+    assert out.startswith("Σας ευχαριστούμε")
+    assert "χρόνο σας." in out
+    assert "τη συνάντηση" in out  # "τη" stays: accusative before a noun
+    assert "της κυβέρνησης" in out or "τη κυβέρνηση" in out
 
 
 def test_restores_clear_cases():

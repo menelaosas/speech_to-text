@@ -14,6 +14,8 @@ from .config import (
     MODEL_ID,
     OUTPUT_DIR,
     SAMPLE_RATE,
+    SIGMA_MODEL_DIR,
+    SIGMA_MODEL_ID,
     SUPPORTED_LANGUAGES,
 )
 from .writers import FORMATS
@@ -38,12 +40,21 @@ def cmd_download(args: argparse.Namespace) -> int:
 
     log.info("Downloading %s to %s", MODEL_ID, args.model_dir)
     snapshot_download(repo_id=MODEL_ID, local_dir=args.model_dir)
+    if not args.skip_sigma_model:
+        log.info("Downloading %s to %s", SIGMA_MODEL_ID, SIGMA_MODEL_DIR)
+        snapshot_download(
+            repo_id=SIGMA_MODEL_ID,
+            local_dir=SIGMA_MODEL_DIR,
+            allow_patterns=["config.json", "model.safetensors", "tokenizer.json",
+                            "tokenizer_config.json", "sentencepiece.bpe.model"],
+        )
     log.info("Done.")
     return 0
 
 
 def cmd_transcribe(args: argparse.Namespace) -> int:
     from .audio import load_audio, split_audio
+    from .greek import SigmaRestorer, restore_final_sigma
     from .transcriber import Transcriber
     from .writers import write_outputs
 
@@ -53,6 +64,8 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
         return 1
 
     transcriber = Transcriber(model=args.model, device=args.device)
+    sigma_fix = args.sigma_fix if args.language == "el" else "off"
+    restorer = SigmaRestorer(device=args.device) if sigma_fix == "lm" else None
 
     for path in files:
         log.info("Processing %s", path.name)
@@ -67,8 +80,14 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
             language=args.language,
             batch_size=args.batch_size,
             punctuation=not args.no_punctuation,
-            fix_greek_sigma=not args.no_sigma_fix,
+            num_beams=args.beams,
         )
+        if restorer:
+            for seg, text in zip(result, restorer.restore([r.text for r in result])):
+                seg.text = text
+        elif sigma_fix == "dict":
+            for seg in result:
+                seg.text = restore_final_sigma(seg.text)
         written = write_outputs(result, path, args.output_dir, args.formats, args.language, args.timestamps)
         elapsed = time.perf_counter() - t0
         log.info("Finished in %.1f s (%.1fx real time)", elapsed, duration / elapsed)
@@ -84,6 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     d = sub.add_parser("download", help="download the model into models/")
     d.add_argument("--model-dir", type=Path, default=MODEL_DIR)
+    d.add_argument("--skip-sigma-model", action="store_true", help="don't download the Greek ς-restoration model")
     d.set_defaults(func=cmd_download)
 
     t = sub.add_parser("transcribe", help="transcribe audio files")
@@ -94,8 +114,10 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("-f", "--formats", nargs="+", choices=FORMATS, default=["txt", "srt"])
     t.add_argument("--timestamps", action="store_true", help="prefix each paragraph in .txt with its start time")
     t.add_argument("--no-punctuation", action="store_true", help="lowercase output without punctuation")
-    t.add_argument("--no-sigma-fix", action="store_true",
-                   help="disable the Greek final-sigma (ς) restoration (see docs/wiki/Known-Issues.md)")
+    t.add_argument("--sigma-fix", choices=["lm", "dict", "off"], default="lm",
+                   help="Greek final-sigma (ς) restoration: lm = context-aware language model (best), "
+                        "dict = word list only, off (see docs/wiki/Accuracy.md)")
+    t.add_argument("--beams", type=int, default=4, help="beam search width; 1 = greedy (faster, slightly less accurate)")
     t.add_argument("-b", "--batch-size", type=int, default=8, help="segments per GPU batch (lower if out of memory)")
     t.add_argument("--model", help="model path or Hub id (default: local models/ copy)")
     t.add_argument("--device", help="cuda, cuda:1, cpu (default: auto)")

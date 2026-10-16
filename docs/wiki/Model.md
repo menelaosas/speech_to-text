@@ -28,6 +28,11 @@ Our timestamps come from the segment boundaries.
 
 ## Performance (measured on this project)
 
-RTX 4070 Laptop 8 GB, bf16, batch 8:
-- 2 min clip: 1.3 s (~90× real time)
-- 78.5 min recording, 172 segments: 29 s (~160× real time), plus about 2 s to load the model
+RTX 4070 Laptop 8 GB, bf16, batch 8, 78.5 min recording (172 segments):
+
+| Settings | Time | Speed |
+|---|---|---|
+| greedy, dictionary ς fix | 29 s | ~160× real time |
+| beams 4 + XLM-R ς fix (default) | 79 s | ~60× real time |
+
+Accuracy on Greek FLEURS: WER 8.8%, CER 3.3% (see [Accuracy](Accuracy.md)).

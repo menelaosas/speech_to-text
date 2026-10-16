@@ -10,7 +10,6 @@ from transformers import AutoProcessor, CohereAsrForConditionalGeneration
 
 from .audio import Segment, is_silent
 from .config import MODEL_DIR, MODEL_ID, SAMPLE_RATE, SUPPORTED_LANGUAGES
-from .greek import restore_final_sigma
 from .postprocess import collapse_repetitions
 
 log = logging.getLogger(__name__)
@@ -51,9 +50,9 @@ class Transcriber:
         language: str,
         batch_size: int = 8,
         punctuation: bool = True,
+        num_beams: int = 4,
         max_new_tokens: int = 256,
         show_progress: bool = True,
-        fix_greek_sigma: bool = True,
     ) -> list[TranscribedSegment]:
         if language not in SUPPORTED_LANGUAGES:
             raise ValueError(f"Unsupported language {language!r}. Choose one of: {', '.join(SUPPORTED_LANGUAGES)}")
@@ -74,16 +73,13 @@ class Transcriber:
             inputs.pop("audio_chunk_index", None)  # segments are short enough to never be chunked
             inputs = inputs.to(self.model.device, dtype=self.model.dtype)
 
-            outputs = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
+            outputs = self.model.generate(**inputs, max_new_tokens=max_new_tokens, num_beams=num_beams)
             texts = self.processor.decode(outputs, skip_special_tokens=True)
             if isinstance(texts, str):
                 texts = [texts]
 
             for seg, text in zip(batch, texts):
-                text = collapse_repetitions(text.strip())
-                if language == "el" and fix_greek_sigma:
-                    text = restore_final_sigma(text)
-                results.append(TranscribedSegment(seg.start, seg.end, text))
+                results.append(TranscribedSegment(seg.start, seg.end, collapse_repetitions(text.strip())))
             bar.update(len(batch))
 
         bar.close()

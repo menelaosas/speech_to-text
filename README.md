@@ -11,7 +11,7 @@ Audio in → transcript files (`.txt`, `.srt`, `.json`) out. Everything runs on 
 ```bash
 uv sync                                   # create .venv and install dependencies
 uv run hf auth login                      # once; accept the model terms on Hugging Face first
-uv run speech-to-text download            # download the model (~4 GB) into models/
+uv run speech-to-text download            # download the models (~6 GB) into models/
 
 cp ~/recording.m4a data/input/
 uv run speech-to-text transcribe          # transcribes everything in data/input/
@@ -42,10 +42,11 @@ uv run speech-to-text transcribe --help
 │   ├── audio.py            # ffmpeg decoding + splitting at quiet points
 │   ├── transcriber.py      # model loading and batched inference
 │   ├── postprocess.py      # removes decoder repetition loops
-│   ├── greek.py            # final-sigma (ς) fix for Greek
+│   ├── greek.py            # final-sigma (ς) restoration for Greek (XLM-R)
 │   ├── writers.py          # txt / srt / json output
 │   ├── config.py           # defaults (paths, language, segment length)
 │   └── resources/          # Greek word frequency list
+├── scripts/evaluate.py     # accuracy benchmarks (WER/CER on Greek FLEURS)
 ├── tests/                  # pytest unit tests
 ├── docs/wiki/              # project wiki
 ├── data/input/             # put audio here (git-ignored)
@@ -67,4 +68,5 @@ See the [wiki](docs/wiki/Home.md): installation, usage, how it works, the model,
 
 - Code: see repository.
 - Model: Apache 2.0 (Cohere Labs).
-- `src/speech_to_text/resources/el_50k.txt`: [FrequencyWords](https://github.com/hermitdave/FrequencyWords) by Hermit Dave, CC BY-SA 4.0.
+- ς-restoration model: [XLM-RoBERTa-large](https://huggingface.co/FacebookAI/xlm-roberta-large), MIT.
+- `src/speech_to_text/resources/el_50k.txt`, `el_sigma_words.txt`: [FrequencyWords](https://github.com/hermitdave/FrequencyWords) by Hermit Dave, CC BY-SA 4.0.

@@ -1,6 +1,6 @@
 [project]
 name = "speech-to-text"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local speech-to-text (m4a, mp3, wav...) using Cohere Transcribe 03-2026"
 readme = "README.md"
 authors = [
@@ -29,5 +29,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "jiwer>=4.0.0",
+    "pyarrow>=26.0.0",
     "pytest>=9.1.1",
 ]

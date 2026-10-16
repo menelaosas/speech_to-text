@@ -7,7 +7,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODEL_ID = "CohereLabs/cohere-transcribe-03-2026"
 MODEL_DIR = PROJECT_ROOT / "models" / "cohere-transcribe-03-2026"
 
-INPUT_DIR = PROJECT_ROOT / "data" / "input"
+# Masked language model used to restore the Greek final sigma (see greek.py).
+SIGMA_MODEL_ID = "FacebookAI/xlm-roberta-large"
+SIGMA_MODEL_DIR = PROJECT_ROOT / "models" / "xlm-roberta-large"
+
+INPUT_DIR =PROJECT_ROOT / "data" / "input"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "output"
 
 SAMPLE_RATE = 16_000

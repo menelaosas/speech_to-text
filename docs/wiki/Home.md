@@ -10,6 +10,7 @@ Local transcription of audio files with Cohere Transcribe (`CohereLabs/cohere-tr
 | [Usage](Usage.md) | All CLI commands and options, output formats, using it from Python |
 | [Architecture](Architecture.md) | How the pipeline works, module by module |
 | [Model](Model.md) | Facts about the Cohere Transcribe model: languages, limits, performance |
+| [Accuracy](Accuracy.md) | Benchmarks: what improves accuracy, what was tried and rejected |
 | [Known Issues](Known-Issues.md) | Model bugs and their workarounds (Greek ς) |
 | [Troubleshooting](Troubleshooting.md) | Common errors and fixes |
 | [Development](Development.md) | Tests, adding features, project conventions |
