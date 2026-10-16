@@ -5,8 +5,8 @@ Local transcription of audio files with Cohere Transcribe (`CohereLabs/cohere-tr
 ## Pages
 
 | Page | What's in it |
-|---|---|
-| [Installation](Installation.md) | Setting up Python, uv, ffmpeg, Hugging Face access and the model |
+| --- | --- |
+| [Installation](Installation.md) | Setting up Python, uv, ffmpeg, Hugging Face access and the models |
 | [Usage](Usage.md) | All CLI commands and options, output formats, using it from Python |
 | [Architecture](Architecture.md) | How the pipeline works, module by module |
 | [Model](Model.md) | Facts about the Cohere Transcribe model: languages, limits, performance |

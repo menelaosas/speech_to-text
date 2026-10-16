@@ -1,0 +1,43 @@
+[project]
+name = "speech-pilot"
+version = "0.1.0"
+description = "Judicial Speech AI pilot: speaker-attributed Greek transcript of a single recording"
+readme = "README.md"
+authors = [
+    { name = "menelaosas", email = "menelaosasim@gmail.com" }
+]
+requires-python = "==3.12.*"
+# Exact pins: the pilot must be reproducible. Transitive versions are locked in uv.lock.
+dependencies = [
+    "accelerate==1.15.0",
+    "huggingface-hub==2.2.0",
+    "jiwer==4.0.0",
+    "librosa==1.0.0",
+    "numpy==2.5.4",
+    "protobuf==7.36.2",
+    "pyannote-audio==4.0.7",
+    "pyannote-core==6.1.0",
+    "pyannote-metrics==4.2.0",
+    "pydantic==2.14.1",
+    "pyyaml==6.0.3",
+    "sentencepiece==0.2.2",
+    "silero-vad==6.2.3",
+    "soundfile==0.14.0",
+    "torch==2.14.1",
+    "torchaudio==2.11.0",
+    "torchcodec==0.17.0",
+    "tqdm==4.70.1",
+    "transformers==5.20.1",
+]
+
+[project.scripts]
+speech-pilot = "speech_pilot.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+]

@@ -9,7 +9,7 @@ audio file ─► load_audio ─► split_audio ─► Transcriber ─► collap
 ## Modules (`src/speech_to_text/`)
 
 | Module | Responsibility |
-|---|---|
+| --- | --- |
 | `config.py` | Paths (`models/`, `data/input`, `data/output`), default language, segment lengths, supported languages |
 | `audio.py` | `load_audio`: calls `ffmpeg` to decode to 16 kHz mono float32. `split_audio`: cuts audio into segments of ≤ 30 s. `is_silent`: skips silent segments. |
 | `transcriber.py` | `Transcriber` loads `CohereAsrForConditionalGeneration` (native in transformers ≥ 5.4) in bf16 on GPU, then runs segments in batches |

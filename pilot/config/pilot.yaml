@@ -1,0 +1,94 @@
+# Judicial Speech AI pilot configuration.
+# Relative paths are resolved against the pilot/ directory (the parent of this config folder).
+
+run:
+  output_root: runs
+  seed: 1234
+  hardware_profile: laptop_8gb
+
+input:
+  path: ../data/input/ΓΕΝΙΚΟ ΕΠΙΤΕΛΕΙΟ ΕΘΝΙΚΗΣ ΑΜΥΝΑΣ 11.m4a
+  language: el
+  num_speakers: null          # unknown: pyannote estimates the count
+  min_speakers: null
+  max_speakers: null
+  recording_setup: phone on the table
+  excerpt: null               # e.g. {start_s: 0, end_s: 600} to process only part of the file
+
+device:
+  name: cuda
+  allow_cpu: false            # never fall back to CPU silently; a step that needs CPU must say so
+
+prepare:
+  sample_rate: 16000
+
+vad:
+  provider: silero
+  model_id: snakers4/silero-vad
+  device: cpu                 # small model; CPU is the reference runtime for Silero (see DECISIONS.md)
+  threshold: 0.5
+  min_speech_ms: 250
+  min_silence_ms: 300
+  speech_pad_ms: 100
+
+diarization:
+  provider: pyannote
+  model_id: pyannote/speaker-diarization-community-1
+  model_path: ../models/pyannote-speaker-diarization-community-1
+  segmentation_batch_size: 16
+  embedding_batch_size: 16
+
+asr:
+  provider: cohere
+  model_id: CohereLabs/cohere-transcribe-03-2026
+  model_path: ../models/cohere-transcribe-03-2026
+  dtype: bfloat16
+  # turns  = one unit per diarization turn (best attribution, but short units hallucinate)
+  # vad    = VAD regions merged up to max_unit_s (most context, but units mix speakers)
+  # hybrid = diarization turns, units shorter than min_context_s merged into a neighbour (DECISIONS D-11)
+  segmentation: hybrid
+  num_beams: 4                # measured on Greek FLEURS: WER 9.15% (greedy) -> 8.86% (4 beams)
+  batch_size: 4
+  max_new_tokens: 256
+  max_unit_s: 30.0            # Cohere clips are limited to 35 s; stay below to avoid internal re-chunking
+  split_search_s: 5.0         # look for the quietest point in the last N s before max_unit_s
+  merge_gap_s: 0.5            # merge consecutive same-speaker turns closer than this
+  min_unit_s: 0.3             # shorter units are not transcribed (counted in metrics)
+  min_context_s: 3.0          # hybrid: units shorter than this are merged into a neighbour
+  context_merge_gap_s: 1.0    # hybrid: ...if the gap to that neighbour is at most this
+  vad_fill_min_s: 0.5         # hybrid: VAD speech without a diarization turn becomes a unit if >= this
+  punctuation: true
+
+normalization:
+  # Secondary, machine-normalised text layer. The canonical text is always the raw ASR output.
+  greek_final_sigma: true
+  model_id: FacebookAI/xlm-roberta-large
+  model_path: ../models/xlm-roberta-large
+  dtype: float16
+  window_words: 8
+  batch_size: 64
+
+attribution:
+  overlap_min_s: 0.5          # mark a segment as overlap if >= this many seconds have 2+ active speakers
+  overlap_min_fraction: 0.15  # ...or if this fraction of the segment has 2+ active speakers
+  dominant_min_fraction: 0.6  # below this share of the main speaker, the speaker is "uncertain"
+
+qc:
+  nonspeech_max_fraction: 0.5 # text while VAD says less than (1 - this) of the segment is speech
+  max_words_per_s: 4.5
+  min_words_per_s: 0.4
+  min_speech_for_rate_s: 3.0
+  empty_min_speech_s: 2.0
+  repetition_min_repeats: 4
+  # Text the model is known to produce on silence/noise (memorised subtitle credits). Matched
+  # case-insensitively as substrings; flagged, never removed.
+  hallucination_phrases:
+    - υπότιτλοι
+    - authorwave
+    - subtitles by
+    - ευχαριστούμε που παρακολουθήσατε
+    - ευχαριστώ που παρακολουθήσατε
+
+reference:
+  excerpt_min_s: 180
+  excerpt_max_s: 300

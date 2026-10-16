@@ -5,9 +5,10 @@
 - **Python 3.12** (pinned in `.python-version`; uv installs it automatically if missing)
 - **uv**: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - **ffmpeg**, used to decode m4a/mp3/etc.: `sudo apt install ffmpeg`
-- **GPU (recommended)**: NVIDIA with ≥ 6 GB VRAM and a recent driver. The model takes about 4 GB in bf16.
+- **GPU (recommended)**: NVIDIA with ≥ 6 GB VRAM and a recent driver. Cohere Transcribe takes about 4 GB
+  in bf16 and the Greek ς-restoration model (XLM-RoBERTa-large) about 1 GB more in fp16.
   Developed on an RTX 4070 Laptop (8 GB) with CUDA 13 wheels.
-- **Disk**: about 4 GB for the model and about 6 GB for the PyTorch/CUDA environment.
+- **Disk**: about 6.3 GB for the models (4.1 GB + 2.2 GB) and about 6 GB for the PyTorch/CUDA environment.
 
 ## 2. Install dependencies
 
@@ -33,11 +34,26 @@ The model is public but **gated**: you must accept its terms once.
 3. Create a *read* token at https://huggingface.co/settings/tokens
 4. `uv run hf auth login` and paste the token.
 
-## 4. Download the model
+## 4. Download the models
 
 ```bash
-uv run speech-to-text download
+uv run speech-to-text download                     # both models
+uv run speech-to-text download --skip-sigma-model  # only Cohere Transcribe (non-Greek use)
 ```
 
-Weights go to `models/cohere-transcribe-03-2026/` (git-ignored). The tool always prefers this
-local copy. If it is missing, the tool falls back to downloading into the Hugging Face cache.
+| Model | Folder (git-ignored) | Size | Used for |
+| --- | --- | --- | --- |
+| Cohere Transcribe 03-2026 | `models/cohere-transcribe-03-2026/` | 4.1 GB | speech → text |
+| XLM-RoBERTa-large | `models/xlm-roberta-large/` | 2.2 GB | restoring Greek final ς (`--sigma-fix lm`) |
+
+The tool always prefers these local copies. If one is missing, it falls back to downloading into the
+Hugging Face cache.
+
+## 5. (Optional) Evaluation data
+
+To run the accuracy benchmarks in `scripts/evaluate.py` (see [Accuracy](Accuracy.md)):
+
+```bash
+uv run hf download google/fleurs parquet-data/el_gr/test-00000-of-00001.parquet \
+    --repo-type dataset --local-dir data/eval/fleurs
+```

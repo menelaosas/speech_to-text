@@ -31,7 +31,21 @@ uv run speech-to-text transcribe interview.mp3 -l en
 # timestamps in the .txt, smaller GPU batches
 uv run speech-to-text transcribe -f txt --timestamps -b 4
 
+# faster, slightly less accurate (greedy decoding, word-list ς fix)
+uv run speech-to-text transcribe --beams 1 --sigma-fix dict
+
 uv run speech-to-text transcribe --help
+```
+
+## Accuracy
+
+By default the tool uses beam search (4 beams) and, for Greek, restores the final **ς** that the model
+drops on conversational audio. A local XLM-RoBERTa-large model picks the right form in context.
+On Greek FLEURS the word error rate is 8.8%, and ς errors go down by 61%. Details and everything that
+was tried: [docs/wiki/Accuracy.md](docs/wiki/Accuracy.md).
+
+```bash
+uv run python scripts/evaluate.py -n 200 asr    # WER/CER benchmark (see the wiki for data setup)
 ```
 
 ## Project layout
@@ -45,7 +59,7 @@ uv run speech-to-text transcribe --help
 │   ├── greek.py            # final-sigma (ς) restoration for Greek (XLM-R)
 │   ├── writers.py          # txt / srt / json output
 │   ├── config.py           # defaults (paths, language, segment length)
-│   └── resources/          # Greek word frequency list
+│   └── resources/          # Greek word frequency lists
 ├── scripts/evaluate.py     # accuracy benchmarks (WER/CER on Greek FLEURS)
 ├── tests/                  # pytest unit tests
 ├── docs/wiki/              # project wiki
@@ -54,15 +68,24 @@ uv run speech-to-text transcribe --help
 └── models/                 # downloaded model weights (git-ignored)
 ```
 
+## Judicial Speech AI pilot
+
+[pilot/](pilot/README.md) is a separate, pinned project that runs the full speaker-attributed pipeline on
+one recording: Silero VAD, pyannote diarization, Cohere ASR, attribution, quality flags, an integrity
+check and a report. It reuses this tool's beam search and Greek ς restoration (kept as a non-canonical
+layer). See `pilot/PROGRESS.md` and `pilot/DECISIONS.md`.
+
 ## Documentation
 
-See the [wiki](docs/wiki/Home.md): installation, usage, how it works, the model, known issues and troubleshooting.
+See the [wiki](docs/wiki/Home.md): installation, usage, how it works, the model, accuracy benchmarks,
+known issues, troubleshooting and the changelog.
 
 ## Requirements
 
 - Linux/macOS/Windows with Python 3.12+ and [uv](https://docs.astral.sh/uv/)
 - `ffmpeg` on PATH
 - NVIDIA GPU with ≥ 6 GB VRAM recommended (CPU works, but slowly)
+- ~6.3 GB disk for the models
 
 ## Licenses
 

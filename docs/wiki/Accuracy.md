@@ -8,7 +8,7 @@ lowercase without punctuation and with accents kept.
 ## Summary
 
 | Change | Effect | Status |
-|---|---|---|
+| --- | --- | --- |
 | Beam search (`--beams 4`) | WER 9.15% → 8.86% on clean speech, removes some hallucinations | **default** |
 | Context-aware ς restoration with XLM-R (`--sigma-fix lm`) | ς-related word errors −61% when the model drops ς | **default** |
 | Adaptive ς margin | Avoids adding wrong ς when the model already writes them | **default** |
@@ -33,7 +33,7 @@ Take the 350 held-out reference sentences (rows 300–649, not used for tuning),
 (1,423 of 7,969 words), and measure how well each method restores them:
 
 | Method | Restored | Wrongly added | Still missing | Word accuracy |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | none | 0 | 0 | 1423 | 82.1% |
 | `dict`: frequency ratio ≥ 20 | 540 | 9 | 883 | 88.8% |
 | `lm`: XLM-R-large, margin −1 | 1181 | 106 | 242 | **95.6%** |
@@ -54,14 +54,14 @@ XLM-R-large with the 50k word list (93.8%) and with the full word list (95.3–9
 The best margin depends on whether the model dropped the ς:
 
 | Raw transcript ς rate | Situation | Margin | Result |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | < 5% | model dropped ς (conversational audio) | −1 (lean towards ς) | 95.6% word acc. on ς-stripped text |
 | ≥ 5% | model behaving (clean speech) | +3 (only confident fixes) | FLEURS WER 8.88% → 8.78% |
 
 ## Current defaults on FLEURS (200 clips, 36.7 min)
 
 | Config | WER | CER | Time |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | greedy, no fix | 9.15% | 3.43% | 17 s |
 | beams 4, dict | 8.86% | 3.28% | 29 s |
 | **beams 4, lm (default)** | **8.78%** | **3.27%** | 36 s |

@@ -17,7 +17,7 @@ uv run pytest      # unit tests (no GPU or model needed)
 ## Tests
 
 | File | Covers |
-|---|---|
+| --- | --- |
 | `tests/test_audio.py` | Segmenting: no gaps or overlaps, max length, cuts at silence |
 | `tests/test_greek.py` | Final-sigma restoration (the LM test is skipped if `models/xlm-roberta-large` is missing) |
 | `tests/test_postprocess.py` | Repetition-loop collapsing |

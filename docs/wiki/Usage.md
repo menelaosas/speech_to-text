@@ -10,7 +10,7 @@ uv run speech-to-text transcribe [INPUTS ...] [options]
 Supported extensions: m4a, mp3, wav, flac, ogg, opus, aac, webm, mp4, mkv (anything ffmpeg reads).
 
 | Option | Default | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | `-l, --language` | `el` | Spoken language. **Required by the model**: it has no auto-detection. |
 | `-o, --output-dir` | `data/output` | Where transcripts are written |
 | `-f, --formats` | `txt srt` | Any of `txt`, `srt`, `json` |
