@@ -69,6 +69,10 @@ The best margin depends on whether the model dropped the ς:
 On the 78.5-minute meeting recording: 79 s in total (~60× real time). The share of words ending in ς
 went from 5.0% (dict) to 10.5% (lm).
 
+> To measure a change to the **pilot** pipeline, use the [Benchmarks](Benchmarks.md) page
+> (`speech-pilot benchmark` on Common Voice / FLEURS, with confidence intervals and paired comparison).
+> The FLEURS script on this page measures the root `speech-to-text` tool.
+
 ## Measured on the real recording
 
 The operator transcribed 3.5 minutes of the meeting recording by hand (00:31:38–00:35:08, 571 words,

@@ -35,7 +35,7 @@ uv run speech-to-text transcribe /tmp/sample.m4a -o /tmp/out -f txt
 
 ## Pilot (`pilot/`)
 
-Separate uv project, Python 3.12, exact pins. 26 tests (no models needed):
+Separate uv project, Python 3.12, exact pins. 38 tests (no models needed):
 
 ```bash
 cd pilot && uv run pytest
@@ -48,10 +48,17 @@ cd pilot && uv run pytest
 | `tests/test_qc_export.py` | quality flags, TXT/SRT/RTTM formats, schema round trip |
 | `tests/test_greek_text.py` | scoring normaliser, Greek number verbaliser, reference import |
 | `tests/test_cache.py` | an upstream change invalidates downstream steps |
+| `tests/test_benchmark.py` | benchmark scoring (Greek normaliser), seeded subsets, Common Voice loading, paired comparison verdicts |
+| `tests/test_web.py` | Speech Studio: save/reopen/export, audio ranges, uploads, host/origin checks, edit validation, import |
+
+The web UI (`web.py` + `web_assets/`) is plain HTML/CSS/JS served by the Python standard library, with
+no frontend build. It must never load models itself: it calls the pilot CLI as a subprocess
+([Web UI](Web-UI.md)).
 
 Conventions: no paths or hardware values in code (all in `config/pilot.yaml`); every model behind a
 provider interface (`providers/`); every decision recorded with its evidence in `pilot/DECISIONS.md`.
-Measure pipeline changes against the reference with `scripts/compare_on_reference.py`.
+Measure pipeline changes with `speech-pilot benchmark` + `benchmark-compare` (Common Voice dev, then test; see
+[Benchmarks](Benchmarks.md)) and against the meeting reference with `scripts/compare_on_reference.py`.
 
 ## Ideas / TODO
 

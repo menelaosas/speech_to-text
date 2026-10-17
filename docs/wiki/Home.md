@@ -11,6 +11,8 @@ Local transcription of audio files with Cohere Transcribe (`CohereLabs/cohere-tr
 | [Architecture](Architecture.md) | How the pipeline works, module by module |
 | [Model](Model.md) | Facts about the Cohere Transcribe model: languages, limits, performance |
 | [Pilot](Pilot.md) | Speaker-attributed pipeline (`pilot/`): diarization, word timestamps, evidence handling, measured results |
+| [Web UI](Web-UI.md) | Speech Studio: upload, transcribe, listen with word highlighting, correct and export in the browser |
+| [Benchmarks](Benchmarks.md) | Measure improvements: WER/CER on Common Voice and FLEURS Greek, paired comparison with confidence intervals |
 | [Accuracy](Accuracy.md) | Benchmarks: what improves accuracy, what was tried and rejected |
 | [Known Issues](Known-Issues.md) | Model bugs and their workarounds (Greek ς) |
 | [Troubleshooting](Troubleshooting.md) | Common errors and fixes |
@@ -29,3 +31,5 @@ uv run speech-to-text transcribe
 
 Need to know **who said what**? Use the [pilot](Pilot.md):
 `cd pilot && uv run speech-pilot run --run-id <name>` → `pilot/runs/<name>/transcript.txt`.
+
+Prefer the browser? `cd pilot && uv run speech-pilot-web` → open http://127.0.0.1:8765 ([Web UI](Web-UI.md)).

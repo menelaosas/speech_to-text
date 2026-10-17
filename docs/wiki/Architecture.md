@@ -2,7 +2,7 @@
 
 This page describes the root `speech-to-text` tool. The speaker-attributed pipeline (VAD, diarization,
 word alignment, quality flags, provider interfaces) is described on the [Pilot](Pilot.md) page and in
-`pilot/README.md`.
+`pilot/README.md`; its browser front end on [Web UI](Web-UI.md).
 
 ```text
 audio file ─► load_audio ─► split_audio ─► Transcriber ─► collapse_repetitions ─► SigmaRestorer ─► writers ─► .txt/.srt/.json

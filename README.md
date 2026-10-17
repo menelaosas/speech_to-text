@@ -29,12 +29,24 @@ uv sync
 uv run speech-pilot-web
 ```
 
-Open **http://127.0.0.1:8765**. Upload a recording, select **Transcribe recording**, then listen with
-word highlighting, correct words and speaker labels, and select **Save new version**. Download the
-edited transcript as TXT, SRT, or JSON. The original machine transcript remains unchanged.
+Open **<http://127.0.0.1:8765>** (the app is called **Speech Studio**):
+
+1. Upload a recording and select **Transcribe recording**. Progress is shown step by step; a failed job
+   can be retried without uploading again.
+2. Listen with word-by-word highlighting. The player stays at the top while you scroll, and each speaker
+   has its own colour.
+3. Correct words (double-click a word, **Listen again**, **Restore** the machine word) and speakers. The
+   **Speakers** panel renames a speaker everywhere at once (e.g. SPEAKER_01 → a name).
+4. Use **Show → Warnings only** and **Next to review** to go straight to the segments most likely to
+   need a fix.
+5. **Save new version** (or `Ctrl+S`), then **Download** TXT, SRT or JSON: your corrected version, or the
+   machine transcript as produced. The original machine transcript is never changed.
+
+Keyboard: `Space` play/pause · `←`/`→` 5 s · `/` search · `Ctrl+S` save.
 
 This uses the pilot's configured local models, including the Greek word alignment model and pyannote,
-and its GPU requirements. See [browser setup and controls](pilot/README.md#browser-workspace).
+and its GPU requirements. See [browser setup and controls](pilot/README.md#browser-workspace) and the
+[Web UI wiki page](docs/wiki/Web-UI.md) (workflow, storage, security, troubleshooting).
 
 ## Common commands
 
@@ -80,7 +92,9 @@ uv run python scripts/evaluate.py -n 200 asr    # WER/CER benchmark (see the wik
 ├── scripts/evaluate.py     # accuracy benchmarks (WER/CER on Greek FLEURS)
 ├── tests/                  # pytest unit tests
 ├── docs/wiki/              # project wiki
+├── pilot/                  # speaker-attributed pipeline + Speech Studio web UI (own environment)
 ├── data/input/             # put audio here (git-ignored)
+├── data/eval/              # benchmark datasets: common_voice/, fleurs/ (git-ignored)
 ├── data/output/            # transcripts are written here (git-ignored)
 └── models/                 # downloaded model weights (git-ignored)
 ```
@@ -89,13 +103,32 @@ uv run python scripts/evaluate.py -n 200 asr    # WER/CER benchmark (see the wik
 
 [pilot/](pilot/README.md) is a separate, pinned project that runs the full speaker-attributed pipeline on
 one recording: Silero VAD, pyannote diarization, Cohere ASR, attribution, quality flags, an integrity
-check and a report. It reuses this tool's beam search and Greek ς restoration (kept as a non-canonical
-layer). See `pilot/PROGRESS.md` and `pilot/DECISIONS.md`.
+check and a report. It adds word timestamps (Greek CTC alignment) and reuses this tool's beam search and
+Greek ς restoration (kept as a non-canonical layer). Measured on a hand-transcribed excerpt of a real
+recording: WER 37.0%, speaker-attributed cpWER 61.7%, DER 36.6%. See the [Pilot wiki page](docs/wiki/Pilot.md),
+`pilot/PROGRESS.md` and `pilot/DECISIONS.md`. Its browser front end is described above.
+
+## Measuring improvements
+
+The pilot can score itself on Common Voice 27 Greek and FLEURS (placed under `data/eval/`), with
+confidence intervals and a paired before/after comparison:
+
+```bash
+cd pilot
+uv run speech-pilot benchmark --dataset cv --split dev --name before
+# ...change something...
+uv run speech-pilot benchmark --dataset cv --split dev --name after
+uv run speech-pilot benchmark-compare runs/benchmarks/before runs/benchmarks/after
+```
+
+Current baselines: Common Voice dev 8.92%, test 9.77%, FLEURS 7.42% WER. See
+[docs/wiki/Benchmarks.md](docs/wiki/Benchmarks.md).
 
 ## Documentation
 
 See the [wiki](docs/wiki/Home.md): installation, usage, how it works, the model, accuracy benchmarks,
-known issues, troubleshooting and the changelog.
+the [pilot](docs/wiki/Pilot.md), the [web UI](docs/wiki/Web-UI.md), [benchmarks](docs/wiki/Benchmarks.md), known issues, troubleshooting and
+the changelog.
 
 ## Requirements
 

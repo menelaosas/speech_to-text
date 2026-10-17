@@ -69,6 +69,20 @@ The pilot runs offline after that (`HF_HUB_OFFLINE=1` is set by its CLI).
 
 ## 6. (Optional) Evaluation data
 
+### Common Voice Greek (pilot benchmarks)
+
+Download the Greek release from https://commonvoice.mozilla.org/el/datasets and place it so this path
+exists:
+
+```text
+data/eval/common_voice/cv-corpus-27.0-2026-09-11/el/{clips/, dev.tsv, test.tsv, …}
+```
+
+For a different release, change `benchmark.common_voice_dir` in `pilot/config/pilot.yaml`. See
+[Benchmarks](Benchmarks.md).
+
+### FLEURS Greek
+
 To run the accuracy benchmarks in `scripts/evaluate.py` (see [Accuracy](Accuracy.md)):
 
 ```bash

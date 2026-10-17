@@ -18,4 +18,5 @@
 | Pilot: `isolated step … failed (exit code …)` | A GPU step crashed in its own process; the error is printed just above. Common cause: CUDA OOM, so lower `asr.batch_size` or the diarization batch sizes in `pilot/config/pilot.yaml` |
 | Pilot: a changed setting doesn't seem to take effect | Steps are reused when their config and upstream outputs are unchanged; after a code change use `--force <step>` or a new `--run-id` |
 | Pilot: `CUDA requested but not available` | The pilot never falls back to CPU silently. Fix the GPU, or set `device.allow_cpu: true` knowingly |
+| Web UI problems (port in use, failed job, 403) | See the troubleshooting table on [Web UI](Web-UI.md#troubleshooting) |
 | Paths with spaces or Greek letters | Quote them: `"data/input/ΓΕΝΙΚΟ ... 11.m4a"` |

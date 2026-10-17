@@ -17,7 +17,8 @@ Current deliverable: `pilot/runs/pilot-final/REPORT.md`.
 | Models | Cohere + XLM-R (ς) | Silero VAD + pyannote + Cohere + XLM-R (ς) + Greek CTC aligner |
 | Input handling | any audio files | one file, read-only, SHA-256 checked before and after |
 | Time for 78.5 min | ~80 s | ~5.5 min |
-| Output folder | `data/output/` | `pilot/runs/<run_id>/` |
+| Output folder | `data/output/` | `pilot/runs/<run_id>/` (browser app: `pilot/.web-data/`) |
+| Interface | CLI | CLI, or the [Speech Studio web UI](Web-UI.md) |
 
 `data/output/ΓΕΝΙΚΟ ΕΠΙΤΕΛΕΙΟ ΕΘΝΙΚΗΣ ΑΜΥΝΑΣ 11.txt` is the root tool's output (no speakers).
 The speaker-attributed version is `pilot/runs/pilot-final/transcript.txt` (raw) and
@@ -31,7 +32,12 @@ uv sync
 uv run speech-pilot run --run-id pilot-final      # steps 1-9, one command
 uv run speech-pilot compare runs/a runs/b         # determinism check
 uv run speech-pilot score --run runs/pilot-final  # automatic when a reference exists
+uv run speech-pilot-web                           # browser UI: http://127.0.0.1:8765
+uv run speech-pilot benchmark --split dev         # WER/CER on Common Voice (see Benchmarks)
 ```
+
+The browser app (**Speech Studio**) runs this same pipeline for uploaded recordings and adds listening
+with word highlighting and correction. See [Web UI](Web-UI.md).
 
 ## Pipeline
 
@@ -64,6 +70,9 @@ This is one excerpt only; the rest of the file is not measured.
 
 About 22 of the reference's 561 words are typing slips, so part of the WER comes from the reference.
 The DER reference times come from forced alignment of the operator's words, not from hand-marked times.
+
+On public read-speech sets (no speakers involved, see [Benchmarks](Benchmarks.md)): Common Voice 27 Greek
+WER 8.92% (dev) / 9.77% (test), FLEURS 7.42%.
 
 ## Main decisions (see DECISIONS.md)
 
