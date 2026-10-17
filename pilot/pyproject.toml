@@ -32,6 +32,7 @@ dependencies = [
 
 [project.scripts]
 speech-pilot = "speech_pilot.cli:main"
+speech-pilot-web = "speech_pilot.web:main"
 
 [build-system]
 requires = ["uv_build>=0.12.19,<0.13.0"]

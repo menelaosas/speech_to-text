@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Speech Studio · Listen, review, refine</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<aside class="sidebar">
+  <a class="brand" href="/" aria-label="Speech Studio home"><span class="brand-icon">≋</span> Speech Studio</a>
+  <div class="local"><span></span> LOCAL WORKSPACE</div>
+  <button id="new" class="primary">＋ New recording</button>
+  <div class="section-label">YOUR RECORDINGS</div><nav id="jobs" aria-label="Recordings"></nav>
+  <div class="sidebar-foot">Your recording. Your words.<br><span>Processed and stored on this computer.</span></div>
+</aside>
+<main>
+  <header><span>WORKSPACE <span class="slash">/</span> TRANSCRIPT EDITOR</span><span class="private">◉ Local processing</span></header>
+  <section id="welcome" class="welcome">
+    <div class="eyebrow">FROM SPOKEN TO WRITTEN</div><h1>Every word,<br><em>just as you heard it.</em></h1>
+    <p>Transcribe a recording, follow each speaker, and refine the words while you listen.</p>
+    <form id="upload-form"><label id="drop" class="drop" for="file"><span class="upload-icon">↥</span><strong id="filename">Choose an audio recording</strong><span>Drop a file here or click to browse</span><small>WAV, MP3, M4A, FLAC, OGG and more · up to 2 GB</small></label><input id="file" type="file" accept="audio/*,.mp4,.webm" hidden><button id="transcribe" class="primary" type="submit" disabled>Transcribe recording <span>↗</span></button></form>
+    <div class="flow"><span><b>01</b> Upload audio</span><span><b>02</b> Identify speakers</span><span><b>03</b> Listen & refine</span></div>
+  </section>
+  <section id="processing" hidden><div class="eyebrow">TRANSCRIPTION IN PROGRESS</div><h1 id="process-name">Preparing your recording</h1><p id="process-state" role="status"></p><div id="steps"></div><details><summary>Processing log</summary><pre id="log"></pre></details></section>
+  <section id="editor" hidden>
+    <div class="editor-heading"><div><div class="eyebrow">LISTEN · REVIEW · REFINE</div><h1 id="recording-name"></h1><p id="summary"></p></div><div class="save-group"><span id="save-state" role="status">Original transcript</span><button class="primary" id="save">Save new version</button></div></div>
+    <section class="player" aria-label="Audio player"><div class="player-top"><span>↳ RECORDING</span><label>Speed <select id="speed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label></div><audio id="audio" controls preload="metadata"></audio><div class="player-bottom"><div><button id="back" class="quiet">↶ 5 sec</button><button id="forward" class="quiet">5 sec ↷</button></div><label><input id="follow" type="checkbox" checked> Follow playback</label></div></section>
+    <div class="transcript-toolbar"><strong>Transcript <span id="segment-count" class="count"></span></strong><div><label class="search-label">⌕ <input id="search" type="search" placeholder="Find in transcript" aria-label="Find in transcript"></label><label><input id="warnings" type="checkbox"> Needs review</label></div></div>
+    <p class="hint">Click a word to seek. Double-click or press Enter on a word to correct it. Speaker labels are editable. <kbd>Space</kbd> plays or pauses.</p>
+    <div id="transcript"></div><p id="empty-results" hidden>No segments match your filters.</p>
+    <div id="downloads" hidden><strong>Version saved on this computer.</strong><span>Download a corrected copy:</span><a id="download-txt" download="transcript.edited.txt">Text ↗</a><a id="download-srt" download="transcript.edited.srt">Subtitles ↗</a><a id="download-json" download="transcript.edited.json">JSON + original ↗</a></div>
+  </section>
+  <div id="notice" role="alert" hidden></div>
+  <footer><span>SPEECH STUDIO</span><span>A little closer to what was said.</span></footer>
+</main>
+<dialog id="word-dialog"><form method="dialog" id="word-form"><div class="eyebrow">CORRECT TRANSCRIPT</div><h2>What did you hear?</h2><p id="word-context"></p><label for="word-input">Corrected word or phrase</label><input id="word-input" autocomplete="off"><p class="hint">A phrase stays within this word’s original audio timing. Leave blank to remove the word.</p><div class="dialog-actions"><button value="cancel" class="quiet">Cancel</button><button value="save" class="primary">Apply correction</button></div></form></dialog>
+</body></html>

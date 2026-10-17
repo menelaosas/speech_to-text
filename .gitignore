@@ -25,3 +25,6 @@ data/eval/
 
 # Pilot run outputs (derived from evidence; not committed)
 pilot/runs/
+
+# Browser uploads, job logs, and human-edited transcript versions
+pilot/.web-data/

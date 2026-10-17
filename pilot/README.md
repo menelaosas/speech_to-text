@@ -35,6 +35,70 @@ uv run python scripts/compare_on_reference.py --run runs/final   # measure pipel
 `--set key=value` overrides config values (e.g. `--set asr.segmentation=vad`). Re-running with the same
 `--run-id` reuses finished steps whose config is unchanged. `--force 05_asr` re-runs one step.
 
+## Browser workspace
+
+From `pilot/`, start the app:
+
+```bash
+uv sync
+uv run speech-pilot-web
+# Or, using an already installed pilot environment:
+.venv/bin/python -m speech_pilot.web
+```
+
+Open **http://127.0.0.1:8765** in your browser. No Node.js installation or frontend build is needed.
+The server binds to this computer's loopback interface. Keep the terminal running while you work.
+
+1. Choose or drop an audio file (up to 2 GiB), then click **Transcribe recording**.
+2. Follow the processing steps and log. Jobs queue one at a time, using the existing isolated GPU
+   pipeline, speaker diarization, Greek normalization, and CTC word alignment.
+3. Play the recording. The current word is highlighted; overlapping segments can highlight together.
+   Click a word or segment timestamp to seek, adjust speed, or skip five seconds. Space plays/pauses
+   when you are outside an input or control. Uncheck **Follow playback** to scroll freely.
+4. Double-click a word (or focus it and press Enter) to pause and correct it. A correction can contain
+   a phrase, or be blank to remove a token. Corrections keep the original word's time interval; edited
+   text is not automatically realigned. Dotted underlines indicate estimated word timing.
+5. Edit the speaker field for a turn. Use search or **Needs review** to find flagged/overlapping turns.
+6. Click **Save new version**, then download TXT, SRT, or JSON. JSON contains the original transcript
+   and the separate corrections. Saved corrections reopen when you select that recording again.
+   Changes made since the last save require saving before you leave or reload.
+
+All configured model folders must already exist (see `config/pilot.yaml`); inference is offline.
+In addition to Cohere, pyannote, and XLM-R, aligned mode requires:
+
+```bash
+uv run hf download jonatasgrosman/wav2vec2-large-xlsr-53-greek \
+    --local-dir ../models/wav2vec2-large-xlsr-53-greek
+```
+
+The app uses `config/pilot.yaml`, forcing `asr.segmentation=aligned`, processing the full uploaded file,
+and clearing `reference.reuse_dir` so another recording's human reference is never reused. Other model,
+language, decoding, and device settings come from the chosen config. The default requires CUDA.
+Missing models or pipeline failures appear in the processing log; failed jobs can be uploaded again.
+On server restart, interrupted jobs are marked failed; completed recordings and saved edits persist.
+
+To review a completed run without running models again:
+
+```bash
+uv run speech-pilot-web --import-run runs/final-v2
+```
+
+This copies its transcript and prepared WAV into the workspace, leaving the original run untouched.
+Import once; later starts can omit `--import-run`. Older runs without word timestamps support
+segment highlighting and full-segment text editing. Upload and transcribe again for word highlighting.
+
+Use `--port 9000`, `--config config/custom.yaml`, or `--data-dir /path/to/workspace` to override defaults.
+Recordings live in ignored `pilot/.web-data/<job-id>/`: uploaded audio, `pipeline.log`, `run/` outputs,
+`draft.json` (last saved corrections), and `edits/<version>.txt|srt|json`. Each explicit save creates new
+files; canonical `run/transcript.json` is never overwritten. Uploads, WAV copies, and pipeline outputs
+consume local disk space. Stop the server with Ctrl+C; an active pipeline is allowed to finish.
+
+Backend/API checks (use the pilot environment):
+
+```bash
+uv run pytest tests/test_web.py -q
+```
+
 ## Outputs (`runs/<run_id>/`)
 
 | File | Content |

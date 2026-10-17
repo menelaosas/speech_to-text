@@ -19,6 +19,23 @@ uv run speech-to-text transcribe          # transcribes everything in data/input
 
 Transcripts appear in `data/output/`.
 
+## Browser workspace
+
+Run the local upload, transcription, and audio review app using the full speaker-attributed pipeline:
+
+```bash
+cd pilot
+uv sync
+uv run speech-pilot-web
+```
+
+Open **http://127.0.0.1:8765**. Upload a recording, select **Transcribe recording**, then listen with
+word highlighting, correct words and speaker labels, and select **Save new version**. Download the
+edited transcript as TXT, SRT, or JSON. The original machine transcript remains unchanged.
+
+This uses the pilot's configured local models, including the Greek word alignment model and pyannote,
+and its GPU requirements. See [browser setup and controls](pilot/README.md#browser-workspace).
+
 ## Common commands
 
 ```bash
