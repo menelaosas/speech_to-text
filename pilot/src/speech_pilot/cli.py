@@ -146,6 +146,29 @@ def cmd_score(args) -> int:
     return 0
 
 
+def cmd_benchmark(args) -> int:
+    from .benchmark import run_benchmark
+
+    cfg = load_config(args.config, _parse_set(args.set))
+    out = run_benchmark(cfg, args.dataset, args.split, args.limit, args.name)
+    print((out / "REPORT.md").read_text(encoding="utf-8").split("## Worst")[0])
+    log.info("Results in %s", out)
+    return 0
+
+
+def cmd_benchmark_compare(args) -> int:
+    from .benchmark import compare
+
+    res = compare(Path(args.a), Path(args.b))
+    (Path(args.b) / f"compare_vs_{Path(args.a).name}.json").write_text(json.dumps(res, indent=2), encoding="utf-8")
+    for layer, units in res["layers"].items():
+        for unit, v in units.items():
+            print(f"{layer:<6} {unit.upper()}  A {100 * v['a']:.2f}%  B {100 * v['b']:.2f}%  "
+                  f"Δ {100 * v['delta']:+.2f} pts  95% CI [{100 * v['delta_95ci'][0]:+.2f}, {100 * v['delta_95ci'][1]:+.2f}]"
+                  f"  → {v['verdict']}  (better on {v['utterances_better']}, worse on {v['utterances_worse']} clips)")
+    return 0
+
+
 def cmd_align_reference(args) -> int:
     from .score import align_reference
 
@@ -188,6 +211,20 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--numbered", help="operator transcript in '<speaker number> <text>' lines; converted "
                                        "to reference/excerpt.txt first (the source file is only read)")
     sc.add_argument("--reference", help="score against another run's reference folder (e.g. runs/final/reference)")
+
+    bm = sub.add_parser("benchmark", help="WER/CER on Common Voice or FLEURS with the pipeline's ASR settings")
+    bm.add_argument("--dataset", choices=["cv", "fleurs"], default="cv")
+    bm.add_argument("--split", choices=["dev", "test", "train"], default="dev",
+                    help="Common Voice split: dev while trying changes, test to confirm (FLEURS: always test)")
+    bm.add_argument("--limit", type=int, help="seeded random subset of N clips (same clips every time)")
+    bm.add_argument("--name", help="output folder name under runs/benchmarks/")
+    bm.add_argument("--set", action="append", help="config override, e.g. asr.num_beams=1")
+    bm.set_defaults(func=cmd_benchmark)
+
+    bc = sub.add_parser("benchmark-compare", help="paired comparison of two benchmark runs (B minus A)")
+    bc.add_argument("a")
+    bc.add_argument("b")
+    bc.set_defaults(func=cmd_benchmark_compare)
 
     ar = sub.add_parser("align-reference", help="time the operator's reference lines (forced alignment) -> "
                                                 "reference/excerpt.rttm for DER")

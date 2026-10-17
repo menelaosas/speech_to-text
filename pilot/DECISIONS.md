@@ -178,3 +178,24 @@ Found while testing D-19: a recomputed upstream step (e.g. `--force 05c_align`) 
 steps, because reuse was keyed on configuration only (D-10). Now each step stores a hash of its output
 files, and a step's cache key includes the output hashes of all earlier steps (test: `tests/test_cache.py`).
 Runs made before this change are recomputed in full when reused.
+
+## D-21 Benchmarks on public Greek read speech (2026-10-17)
+The meeting reference (571 words) cannot show differences below ~3–4 points. The operator supplied
+Common Voice 27.0 Greek, moved unchanged into `data/eval/common_voice/cv-corpus-27.0-2026-09-11/`.
+`speech-pilot benchmark` runs the pipeline's audio preparation, ASR and ς layer on a split, and
+`benchmark-compare` pairs two runs clip by clip with a bootstrap 95% interval (verdict only when it
+excludes zero). Rule: iterate on `dev`, confirm on `test`.
+
+| Run | WER raw (95% CI) | WER ς layer | CER raw |
+| --- | --- | --- | --- |
+| CV dev, 1,841 clips | 8.92% (8.24–9.66) | 9.14% | 2.45% |
+| CV test, 1,842 clips | 9.77% (9.06–10.51) | 10.09% | 2.74% |
+| FLEURS test, 650 clips | 7.42% (6.84–8.00) | 7.41% | 2.51% |
+| CV dev, greedy | 9.18% | 9.40% | 2.54% |
+
+- D-04 confirmed with enough data: 4 beams vs greedy −0.26 points, 95% CI [−0.46, −0.08].
+- On read speech the ς layer is neutral to slightly worse (+0.2–0.3 points on CV); its gain is specific
+  to audio where Cohere drops ς (meeting: −5.0 points). Candidate change, not adopted yet: skip the layer
+  when the raw ς rate is normal.
+- Caveats: read speech, not meetings; Cohere's training data is undisclosed, so absolute CV scores may be
+  optimistic. Comparisons between variants remain valid.

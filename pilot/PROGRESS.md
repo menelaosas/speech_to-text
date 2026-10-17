@@ -71,3 +71,10 @@
 
 **Stopped here as instructed.** Waiting for the operator: hand transcript of `reference/excerpt.wav`, speaker
 count if known, and approval before anything beyond the pilot. Stretch steps A/B not started.
+
+## Benchmarks (2026-10-17)
+
+- [x] Common Voice 27.0 Greek moved into `data/eval/common_voice/` (29,467 clips, unchanged).
+- [x] `speech-pilot benchmark` / `benchmark-compare` (D-21); `pyarrow` pinned; 38 tests pass.
+- [x] Baselines: CV dev 8.92%, CV test 9.77%, FLEURS 7.42% WER; beam search confirmed significant.
+

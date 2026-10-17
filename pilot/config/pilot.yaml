@@ -102,6 +102,17 @@ qc:
     - ευχαριστούμε που παρακολουθήσατε
     - ευχαριστώ που παρακολουθήσατε
 
+benchmark:
+  # `speech-pilot benchmark`: ASR accuracy (WER/CER) on public read-speech sets, using the same audio
+  # preparation, Cohere settings and ς layer as the pipeline. Use the dev split while trying changes and
+  # the test split to confirm them. See docs/wiki/Benchmarks.md.
+  output_root: runs/benchmarks
+  common_voice_dir: ../data/eval/common_voice/cv-corpus-27.0-2026-09-11/el
+  fleurs_parquet: ../data/eval/fleurs/parquet-data/el_gr/test-00000-of-00001.parquet
+  asr_batch_size: 16
+  bootstrap_samples: 2000
+  decode_workers: 8
+
 reference:
   excerpt_min_s: 180
   excerpt_max_s: 300

@@ -173,3 +173,51 @@ def test_import_and_restart_preserve_draft(tmp_path):
         assert (source / 'transcript.json').read_text() == original
     finally:
         restarted.pool.shutdown()
+
+
+def test_original_download_retry_delete_and_assets(tmp_path):
+    with running(tmp_path) as (ws, request):
+        job_id = ready_job(ws)
+        base = f'/api/jobs/{job_id}'
+        # machine transcript is downloadable without saving a version; raw text, primary speaker
+        status, _, body = request('GET', base + '/download?version=original&format=txt')
+        assert status == 200 and 'SPEAKER_00: Καλημέρα κόσμε' in body.decode()
+        assert json.loads(request('GET', base + '/download?version=original&format=json')[2]) == transcript()
+        assert request('GET', base + '/download?version=original&format=exe')[0] == 400
+        # latest saved version is reported so the download menu survives a reload
+        assert json.loads(request('GET', base + '/transcript')[2])['latest_version'] is None
+        version = json.loads(request('POST', base + '/save', json.dumps(edits()).encode())[2])['version']
+        assert json.loads(request('GET', base + '/transcript')[2])['latest_version'] == version
+        # favicon served, legacy /favicon.ico answered without a 404
+        status, headers, _ = request('GET', '/favicon.svg')
+        assert status == 200 and headers['Content-Type'] == 'image/svg+xml'
+        assert request('GET', '/favicon.ico')[0] == 204
+        # retry only for failed jobs, delete only when not processing
+        assert request('POST', base + '/retry')[0] == 400
+        ws.update(job_id, status='running')
+        assert request('POST', base + '/delete')[0] == 400
+        ws.update(job_id, status='failed', error='boom')
+        assert b'missing' in request('POST', base + '/retry')[2]  # no uploaded file: upload again
+        (ws.folder(job_id) / 'source.wav').write_bytes(b'audio')
+        with patch.object(ws, 'run', lambda job: None):
+            status, _, body = request('POST', base + '/retry')
+        assert status == 202 and json.loads(body)['status'] == 'queued'
+        ws.update(job_id, status='ready')
+        assert request('POST', base + '/delete', headers={'X-Review-Client': ''})[0] == 403
+        assert request('POST', base + '/delete')[0] == 200
+        assert not (ws.root / job_id).exists()
+        assert request('GET', base)[0] == 404
+
+
+def test_integrity_step_counts_as_completed(tmp_path):
+    ws = Workspace(tmp_path, DEFAULT_CONFIG)
+    try:
+        job_id = ready_job(ws)
+        run = ws.folder(job_id) / 'run'
+        (run / '08_export').mkdir()
+        (run / '08_export' / 'step.json').write_text('{}')
+        (run / '09_integrity').mkdir()
+        (run / '09_integrity' / 'integrity.json').write_text('{}')
+        assert ws.read(job_id)['completed_steps'][-2:] == ['08_export', '09_integrity']
+    finally:
+        ws.pool.shutdown()

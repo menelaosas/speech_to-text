@@ -98,6 +98,8 @@ class Workspace:
             job = json.loads((folder / 'job.json').read_text())
         run = folder / 'run'
         job['completed_steps'] = [p.parent.name for p in sorted(run.glob('0*/step.json'))]
+        if (run / '09_integrity' / 'integrity.json').exists():  # step 09 writes no step.json
+            job['completed_steps'].append('09_integrity')
         if (folder / 'pipeline.log').exists():
             with (folder / 'pipeline.log').open('rb') as log:
                 log.seek(max(0, log.seek(0, 2) - 8000))
@@ -143,6 +145,29 @@ class Workspace:
             self.update(job_id, status='ready')
         except Exception as exc:
             self.update(job_id, status='failed', error=str(exc))
+
+    def retry(self, job_id):
+        """Queue a failed job again with its uploaded file; finished pipeline steps are reused."""
+        with self.lock:
+            job = self.read(job_id)
+            if job['status'] != 'failed':
+                raise ValueError('Only failed recordings can be retried')
+            if not (self.folder(job_id) / job['input']).exists():
+                raise ValueError('The uploaded file is missing; upload the recording again')
+            self.update(job_id, status='queued', error=None)
+        self.pool.submit(self.run, job_id)
+
+    def delete(self, job_id):
+        """Remove a recording's workspace folder (upload copy, outputs, corrections). Never touches files
+        outside the workspace; a recording that is queued or processing cannot be deleted."""
+        with self.lock:
+            job = self.read(job_id)
+            if job['status'] not in ('ready', 'failed'):
+                raise ValueError('Wait until processing finishes before deleting this recording')
+            folder = self.folder(job_id)
+            if folder.parent != self.root:
+                raise FileNotFoundError()
+            shutil.rmtree(folder)
 
     def import_run(self, source):
         source = Path(source).resolve()
@@ -214,9 +239,13 @@ class Handler(BaseHTTPRequestHandler):
         ws = self.server.workspace
         url = urlsplit(self.path)
         parts = url.path.strip('/').split('/')
-        if self.command == 'GET' and url.path in ('/', '/app.js', '/style.css'):
+        if self.command == 'GET' and url.path in ('/', '/app.js', '/style.css', '/favicon.svg'):
             name = 'index.html' if url.path == '/' else parts[0]
-            return self.send_bytes((ASSETS / name).read_bytes(), mimetypes.guess_type(name)[0] + '; charset=utf-8')
+            kind = mimetypes.guess_type(name)[0] or 'application/octet-stream'
+            return self.send_bytes((ASSETS / name).read_bytes(),
+                                   kind if name.endswith('.svg') else kind + '; charset=utf-8')
+        if self.command == 'GET' and url.path == '/favicon.ico':
+            return self.send_bytes(b'', 'image/x-icon', 204)
         if parts == ['api', 'jobs']:
             if self.command == 'GET':
                 jobs = [ws.read(p.parent.name) for p in ws.root.glob('*/job.json')]
@@ -246,13 +275,21 @@ class Handler(BaseHTTPRequestHandler):
         action = parts[3] if len(parts) == 4 else ''
         if action == 'audio' and self.command == 'GET':
             return self.audio(folder / 'run' / '02_prepare' / 'processing.wav')
+        if action == 'retry' and self.command == 'POST':
+            ws.retry(job_id)
+            return self.json(ws.read(job_id), 202)
+        if action == 'delete' and self.command == 'POST':
+            ws.delete(job_id)
+            return self.json({'deleted': job_id})
         transcript = json.loads((folder / 'run' / 'transcript.json').read_text())
         if action == 'transcript' and self.command == 'GET':
             prep = folder / 'run' / '02_prepare' / 'prepare.json'
             offset = json.loads(prep.read_text()).get('offset_s', 0) if prep.exists() else 0
             draft = folder / 'draft.json'
+            versions = sorted(p.stem for p in (folder / 'edits').glob('*.json')) if (folder / 'edits').exists() else []
             return self.json({'transcript': transcript, 'offset': offset,
-                              'draft': json.loads(draft.read_text()) if draft.exists() else None})
+                              'draft': json.loads(draft.read_text()) if draft.exists() else None,
+                              'latest_version': versions[-1] if versions else None})
         if action == 'save' and self.command == 'POST':
             data = json.loads(self.rfile.read(self.body_length(10 * 1024**2)))
             edits = validate_edits(transcript, data)
@@ -267,7 +304,15 @@ class Handler(BaseHTTPRequestHandler):
         if action == 'download' and self.command == 'GET':
             query = parse_qs(url.query)
             version, kind = query.get('version', [''])[0], query.get('format', ['txt'])[0]
-            if not re.fullmatch(r'\d{8}T\d{6}-[a-f0-9]{8}', version) or kind not in ('json', 'txt', 'srt'):
+            if kind not in ('json', 'txt', 'srt'):
+                raise ValueError('Invalid export')
+            if version == 'original':  # the machine transcript as produced (raw canonical text)
+                if kind == 'json':
+                    return self.send_bytes((folder / 'run' / 'transcript.json').read_bytes(), 'application/json')
+                machine = {'segments': [{'id': s['id'], 'speaker': s.get('primary_speaker') or 'UNKNOWN',
+                                         'text': s['text']} for s in transcript['segments']]}
+                return self.send_bytes(render_export(transcript, machine, kind).encode(), 'text/plain; charset=utf-8')
+            if not re.fullmatch(r'\d{8}T\d{6}-[a-f0-9]{8}', version):
                 raise ValueError('Invalid export')
             return self.send_bytes((folder / 'edits' / f'{version}.{kind}').read_bytes(),
                                    'application/json' if kind == 'json' else 'text/plain; charset=utf-8')

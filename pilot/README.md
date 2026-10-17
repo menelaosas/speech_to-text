@@ -1,8 +1,10 @@
 # Judicial Speech AI: pilot
 
 Speaker-attributed Greek transcript of a single recording: inspection → 16 kHz copy → Silero VAD →
-pyannote diarization → Cohere ASR → speaker attribution → quality flags → JSON/TXT/SRT/RTTM + report,
-with a SHA-256 integrity check of the original. This is a pilot, not the platform.
+pyannote diarization → Cohere ASR → Greek ς layer → CTC word alignment → speaker attribution → quality
+flags → JSON/TXT/SRT/RTTM + report, with a SHA-256 integrity check of the original. Use it from the
+command line (`speech-pilot`) or in the browser (`speech-pilot-web`, see [Browser workspace](#browser-workspace)).
+This is a pilot, not the platform.
 
 ## Setup
 
@@ -49,25 +51,38 @@ uv run speech-pilot-web
 Open **http://127.0.0.1:8765** in your browser. No Node.js installation or frontend build is needed.
 The server binds to this computer's loopback interface. Keep the terminal running while you work.
 
-1. Choose or drop an audio file (up to 2 GiB), then click **Transcribe recording**.
-2. Follow the processing steps and log. Jobs queue one at a time, using the existing isolated GPU
-   pipeline, speaker diarization, Greek normalization, and CTC word alignment.
-3. Play the recording. The current word is highlighted; overlapping segments can highlight together.
-   Click a word or segment timestamp to seek, adjust speed, or skip five seconds. Space plays/pauses
-   when you are outside an input or control. Uncheck **Follow playback** to scroll freely.
-4. Double-click a word (or focus it and press Enter) to pause and correct it. A correction can contain
-   a phrase, or be blank to remove a token. Corrections keep the original word's time interval; edited
-   text is not automatically realigned. Dotted underlines indicate estimated word timing.
-5. Edit the speaker field for a turn. Use search or **Needs review** to find flagged/overlapping turns.
-6. Click **Save new version**, then download TXT, SRT, or JSON. JSON contains the original transcript
-   and the separate corrections. Saved corrections reopen when you select that recording again.
-   Changes made since the last save require saving before you leave or reload.
+1. Choose or drop an audio file (up to 2 GiB), then click **Transcribe recording**. An upload progress
+   bar shows the transfer.
+2. Follow the 11 pipeline steps (the current one is marked) and the log. Jobs queue one at a time, using
+   the isolated GPU pipeline. If a job fails, the failed step is marked and **Try again** re-runs it
+   with the same upload (finished steps are reused); **Delete recording** removes it.
+3. Play the recording. The player stays at the top while you scroll and shows who is speaking. The
+   current word is highlighted; overlapping segments can highlight together. Each speaker has its own
+   colour, and overlap segments list the other speakers ("with SPEAKER_02"). Click a word to seek, or a
+   segment's ▶ timestamp to play from there. Uncheck **Follow playback** to scroll freely.
+4. Double-click a word (or focus it and press Enter) to correct it. The dialog shows the word in context,
+   what the machine wrote (**Restore** brings it back) and **Listen again** to replay just that word.
+   Enter applies the correction. A correction can be a phrase, or blank to remove the token; it keeps the
+   original word's time interval (no realignment). Dotted underlines mark estimated word timing.
+5. **Speakers** panel: rename a speaker in every segment at once (e.g. SPEAKER_01 → a name). Single
+   turns can still be changed in their own speaker field (suggestions list existing names).
+6. Find text with the search box (matches are highlighted and counted). **Show** filters to *Needs
+   review* (any flag, including overlap) or *Warnings only* (flags other than overlap alone);
+   **Next to review** jumps to the next one.
+7. **Save new version** (enabled when there are unsaved corrections), then use **Download**: the
+   *machine transcript* (as produced, no corrections) or *your saved version* in TXT, SRT or JSON. JSON
+   contains the original transcript and the separate corrections. Saved corrections and the latest
+   version reopen when you select that recording again. Leaving with unsaved corrections asks first.
+
+Keyboard: `Space` play/pause · `←`/`→` 5 s · `/` search · `Ctrl`/`⌘`+`S` save · `Enter` edit the
+focused word, `←`/`→` move between words of a segment.
 
 All configured model folders must already exist (see `config/pilot.yaml`); inference is offline.
 In addition to Cohere, pyannote, and XLM-R, aligned mode requires:
 
 ```bash
 uv run hf download jonatasgrosman/wav2vec2-large-xlsr-53-greek \
+    --revision 489b34fb35fc5876af6193d419772cb9d6d1d531 \
     --local-dir ../models/wav2vec2-large-xlsr-53-greek
 ```
 
@@ -99,6 +114,22 @@ Backend/API checks (use the pilot environment):
 uv run pytest tests/test_web.py -q
 ```
 
+## Benchmarks (measure an improvement)
+
+WER/CER on public Greek read speech, with the pipeline's audio preparation, Cohere settings and ς layer
+(no speakers involved). Data: Common Voice 27.0 Greek in `../data/eval/common_voice/…/el/`, FLEURS in
+`../data/eval/fleurs/`.
+
+```bash
+uv run speech-pilot benchmark --dataset cv --split dev --name baseline-cv-dev     # ~1 min
+uv run speech-pilot benchmark --dataset cv --split dev --name try-x --set asr.num_beams=8
+uv run speech-pilot benchmark-compare runs/benchmarks/baseline-cv-dev runs/benchmarks/try-x
+```
+
+Try changes on `dev`, confirm on `test`. `benchmark-compare` reports the difference with a 95% interval and
+only says "better"/"worse" when it is significant. Baselines: CV dev **8.92%**, CV test **9.77%**, FLEURS
+**7.42%** WER. Details: [Benchmarks wiki page](../docs/wiki/Benchmarks.md).
+
 ## Outputs (`runs/<run_id>/`)
 
 | File | Content |
@@ -115,4 +146,7 @@ uv run pytest tests/test_web.py -q
 
 ## Documents
 
-`ENVIRONMENT_AUDIT.md`, `PROGRESS.md`, `DECISIONS.md`.
+`ENVIRONMENT_AUDIT.md`, `PROGRESS.md`, `DECISIONS.md` (D-01 … D-20).
+
+Wiki: [Pilot](../docs/wiki/Pilot.md) (overview and measured results), [Benchmarks](../docs/wiki/Benchmarks.md) and
+[Web UI](../docs/wiki/Web-UI.md) (Speech Studio workflow, storage, security, troubleshooting).

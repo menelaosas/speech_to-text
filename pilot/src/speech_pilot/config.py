@@ -125,6 +125,15 @@ class ReferenceCfg(Strict):
     reuse_dir: Path | None = None  # reuse an existing (operator-transcribed) reference instead of choosing one
 
 
+class BenchmarkCfg(Strict):
+    output_root: Path = Path("runs/benchmarks")
+    common_voice_dir: Path = Path("../data/eval/common_voice/cv-corpus-27.0-2026-09-11/el")
+    fleurs_parquet: Path = Path("../data/eval/fleurs/parquet-data/el_gr/test-00000-of-00001.parquet")
+    asr_batch_size: int = 16  # clips are short (a few seconds), so larger batches than the pipeline
+    bootstrap_samples: int = 2000
+    decode_workers: int = 8
+
+
 class PilotConfig(Strict):
     run: RunCfg
     input: InputCfg
@@ -138,6 +147,7 @@ class PilotConfig(Strict):
     attribution: AttributionCfg
     qc: QcCfg
     reference: ReferenceCfg
+    benchmark: BenchmarkCfg = BenchmarkCfg()
 
     def digest(self) -> str:
         """Stable hash of the configuration, stored with every step output."""
@@ -165,6 +175,9 @@ def load_config(path: Path = DEFAULT_CONFIG, overrides: dict | None = None) -> P
     cfg.asr.model_path = _resolve(cfg.asr.model_path, base)
     cfg.normalization.model_path = _resolve(cfg.normalization.model_path, base)
     cfg.alignment.model_path = _resolve(cfg.alignment.model_path, base)
+    cfg.benchmark.output_root = _resolve(cfg.benchmark.output_root, base)
+    cfg.benchmark.common_voice_dir = _resolve(cfg.benchmark.common_voice_dir, base)
+    cfg.benchmark.fleurs_parquet = _resolve(cfg.benchmark.fleurs_parquet, base)
     if cfg.reference.reuse_dir is not None:
         cfg.reference.reuse_dir = _resolve(cfg.reference.reuse_dir, base)
     return cfg
