@@ -18,14 +18,15 @@ import numpy as np
 import torch
 
 from . import audio as A
-from .attribution import attribute
+from .attribution import attribute, group_words
 from .config import PilotConfig
 from .export import write_json, write_rttm, write_srt, write_txt
 from .gpu import StepMonitor, free_gpu, gpu_state, gpu_used_mib, host_power_state
 from .providers import AsrUnit, build_providers
 from .qc import flag_segment
 from .reference import export_reference
-from .schema import Interval, ModelInfo, Provenance, Segment, SourceInfo, SpeakerSummary, SpeakerTurn, Transcript
+from .schema import (Interval, ModelInfo, Provenance, Segment, SourceInfo, SpeakerSummary, SpeakerTurn, Transcript,
+                     Word)
 from .units import overlap_regions, units_from_turns, units_from_vad, units_hybrid
 
 log = logging.getLogger(__name__)
@@ -38,9 +39,14 @@ DEPENDS = {
     "04_diarization": ["input", "prepare", "diarization"],
     "05_asr": ["input", "prepare", "vad", "diarization", "asr"],
     "05b_normalize": ["input", "prepare", "vad", "diarization", "asr", "normalization"],
-    "06_attribution": ["input", "prepare", "vad", "diarization", "asr", "normalization", "attribution"],
-    "07_qc": ["input", "prepare", "vad", "diarization", "asr", "normalization", "attribution", "qc"],
+    "05c_align": ["input", "prepare", "vad", "diarization", "asr", "normalization", "alignment"],
+    "06_attribution": ["input", "prepare", "vad", "diarization", "asr", "normalization", "alignment", "attribution"],
+    "07_qc": ["input", "prepare", "vad", "diarization", "asr", "normalization", "alignment", "attribution", "qc"],
 }
+
+
+STEP_ORDER = ["01_inspect", "02_prepare", "03_vad", "04_diarization", "05_asr", "05b_normalize", "05c_align",
+              "06_attribution", "07_qc"]
 
 
 def set_determinism(seed: int) -> None:
@@ -71,6 +77,8 @@ class PilotRun:
         self.providers = build_providers(cfg)
         self.metrics: dict[str, dict] = {}
         self.reused: list[str] = []
+        self.isolated: list[str] = []  # GPU steps computed in an isolated child process in this invocation
+        self.computed: set[str] = set()  # steps computed in this process in this invocation
         self.device = cfg.device.name
         if self.device.startswith("cuda") and not torch.cuda.is_available():
             if not cfg.device.allow_cpu:
@@ -80,8 +88,24 @@ class PilotRun:
 
     # ---- step bookkeeping -------------------------------------------------------------------------------
     def _digest(self, step: str) -> str:
+        """Cache key: the config sections the step depends on + the output hashes of all earlier steps,
+        so a recomputed upstream step invalidates everything after it."""
         sections = {s: getattr(self.cfg, s).model_dump(mode="json") for s in DEPENDS.get(step, [])}
-        return hashlib.sha256(json.dumps(sections, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
+        upstream = {}
+        for prev in STEP_ORDER[: STEP_ORDER.index(step)] if step in STEP_ORDER else []:
+            meta = self.dir / prev / "step.json"
+            if meta.exists():
+                upstream[prev] = _load(meta).get("output_hash")
+        blob = json.dumps({"config": sections, "upstream": upstream}, sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+    def _output_hash(self, step: str) -> str:
+        h = hashlib.sha256()
+        for p in sorted((self.dir / step).iterdir()):
+            if p.is_file() and p.name != "step.json":
+                h.update(p.name.encode())
+                h.update(A.sha256_file(p).encode())
+        return h.hexdigest()[:16]
 
     def _dir(self, step: str) -> Path:
         d = self.dir / step
@@ -94,17 +118,21 @@ class PilotRun:
             return False
         meta = _load(p)
         if meta.get("digest") == self._digest(step) and meta.get("status") == "ok":
-            log.info("[%s] reusing previous result", step)
-            self.reused.append(step)
+            if step not in self.isolated and step not in self.computed:
+                log.info("[%s] reusing previous result", step)
+                self.reused.append(step)
             if meta.get("metrics"):
                 self.metrics[step] = meta["metrics"]
             return True
         return False
 
     def _finish(self, step: str, metrics: dict | None = None, **info) -> None:
+        self.force.discard(step)  # computed now: later calls in this invocation reuse it
+        self.computed.add(step)
         if metrics:
             self.metrics[step] = metrics
         _dump(self.dir / step / "step.json", {"step": step, "status": "ok", "digest": self._digest(step),
+                                              "output_hash": self._output_hash(step),
                                               "finished_at": datetime.now(timezone.utc).isoformat(),
                                               "metrics": metrics, **info})
 
@@ -298,7 +326,47 @@ class PilotRun:
         self._finish(step, mon.m.to_dict())
         return result
 
-    def attribution(self, prep, rows, normalized, regular, overlaps, vad) -> list[Segment]:
+    def align(self, prep: dict, rows: list[dict], normalized: dict[str, dict]) -> dict[str, list[dict]]:
+        """Word timestamps for every unit's raw text (aligned mode only)."""
+        step, d = "05c_align", self._dir("05c_align")
+        if self._cached(step):
+            return _load(d / "words.json")["units"]
+        audio, sr = A.read_wav(Path(prep["processing_wav"]))
+        provider = self.providers["alignment"]
+        provider.device = self.device
+        free_gpu()
+        baseline = gpu_used_mib()
+        result, failed, mismatched = {}, 0, 0
+        with StepMonitor(step, self.device, audio_s=prep["duration_s"]) as mon:
+            with mon.phase("load"):
+                provider.load()
+            with mon.phase("process"):
+                for r in rows:
+                    tokens = r["text"].split()
+                    norm_text = normalized.get(r["id"], {}).get("text_normalized")
+                    norm_tokens = norm_text.split() if norm_text else None
+                    if norm_tokens is not None and len(norm_tokens) != len(tokens):
+                        norm_tokens, mismatched = None, mismatched + 1
+                    seg_audio = audio[int(r["start"] * sr):int(r["end"] * sr)]
+                    times = provider.align(seg_audio, sr, tokens, offset=r["start"])
+                    failed += int(bool(tokens) and not any(t.aligned for t in times))
+                    result[r["id"]] = [
+                        {"text": tok, "text_normalized": norm_tokens[i] if norm_tokens else None,
+                         "start": round(t.start, 3), "end": round(t.end, 3), "score": t.score, "aligned": t.aligned}
+                        for i, (tok, t) in enumerate(zip(tokens, times))]
+            model_info = provider.info()
+            provider.unload()
+        mon.after_unload(baseline)
+        words = [w for ws in result.values() for w in ws]
+        stats = {"units": len(rows), "words": len(words), "aligned_words": sum(w["aligned"] for w in words),
+                 "units_failed": failed, "units_normalized_token_mismatch": mismatched,
+                 "mean_score": round(sum(w["score"] for w in words) / max(len(words), 1), 3)}
+        _dump(d / "words.json", {"model": model_info.model_dump(), "stats": stats, "units": result})
+        mon.m.extra.update(stats)
+        self._finish(step, mon.m.to_dict())
+        return result
+
+    def attribution(self, prep, rows, normalized, regular, overlaps, vad, words=None) -> list[Segment]:
         step, d = "06_attribution", self._dir("06_attribution")
         if self._cached(step):
             return [Segment(**s) for s in _load(d / "segments.json")]
@@ -308,6 +376,12 @@ class PilotRun:
         norm_model = self.cfg.normalization.model_id if normalized else None
         offset = prep["offset_s"]
         segments = []
+        if words is not None:
+            segments = self._word_segments(rows, words, regular, overlaps, vad, asr_meta, diar_meta, vad_meta,
+                                           norm_model, offset)
+            _dump(d / "segments.json", [s.model_dump() for s in segments])
+            self._finish(step)
+            return segments
         for r in sorted(rows, key=lambda r: r["start"]):
             a = attribute(r["start"], r["end"], regular, overlaps, vad, self.cfg.attribution)
             n = normalized.get(r["id"], {})
@@ -330,6 +404,38 @@ class PilotRun:
         self._finish(step)
         return segments
 
+    def _word_segments(self, rows, words, regular, overlaps, vad, asr_meta, diar_meta, vad_meta, norm_model,
+                       offset) -> list[Segment]:
+        """Aligned mode: split each long unit into segments of consecutive words by the same speaker."""
+        align_model = _load(self.dir / "05c_align" / "words.json")["model"]["model_id"]
+        segments = []
+        for r in sorted(rows, key=lambda r: r["start"]):
+            for g in group_words(r["id"], words.get(r["id"], []), regular, self.cfg.alignment.split_pause_s,
+                                 self.cfg.alignment.snap_to_sentence_words):
+                a = attribute(g.start, g.end, regular, overlaps, vad, self.cfg.attribution)
+                speakers = ([g.speaker] if g.speaker else []) + [s for s in a.speakers if s != g.speaker]
+                norm_tokens = [w["text_normalized"] for w in g.words]
+                segments.append(Segment(
+                    id=f"seg_{len(segments) + 1:05d}",
+                    start=round(g.start + offset, 3), end=round(g.end + offset, 3),
+                    speakers=speakers, primary_speaker=g.speaker, speaker_shares=a.shares,
+                    speaker_uncertain=g.speaker is None or (not a.overlap and a.dominance < self.cfg.attribution.dominant_min_fraction),
+                    overlap=a.overlap, overlap_seconds=a.overlap_seconds, vad_speech_seconds=a.vad_speech_seconds,
+                    text=" ".join(w["text"] for w in g.words),
+                    text_normalized=" ".join(norm_tokens) if all(t is not None for t in norm_tokens) else None,
+                    normalization_changes=sum(1 for w in g.words if w["text_normalized"] not in (None, w["text"])),
+                    words=[Word(**(w | {"start": round(w["start"] + offset, 3), "end": round(w["end"] + offset, 3)}))
+                           for w in g.words],
+                    provenance=Provenance(
+                        asr_unit_id=r["id"], asr_model=asr_meta["model"]["model_id"],
+                        asr_revision=asr_meta["model"]["revision"], segmentation=asr_meta["segmentation"],
+                        alignment_model=align_model, decoding=asr_meta["decoding"],
+                        diarization_model=diar_meta["model_id"], diarization_revision=diar_meta["revision"],
+                        vad_model=vad_meta["model_id"], normalization_model=norm_model,
+                    ),
+                ))
+        return segments
+
     def qc(self, segments: list[Segment], rows: list[dict]) -> list[Segment]:
         step, d = "07_qc", self._dir("07_qc")
         if self._cached(step):
@@ -337,7 +443,9 @@ class PilotRun:
         tokens = {r["id"]: r["n_tokens"] for r in rows}
         counts: dict[str, int] = {}
         for seg in segments:
-            seg.flags = flag_segment(seg, self.cfg.qc, self.cfg.asr.max_new_tokens, tokens[seg.provenance.asr_unit_id])
+            # In aligned mode several segments share one ASR unit; truncation is a property of the unit.
+            seg.flags = flag_segment(seg, self.cfg.qc, self.cfg.asr.max_new_tokens, tokens[seg.provenance.asr_unit_id],
+                                     min_word_score=self.cfg.alignment.min_word_score)
             for f in seg.flags:
                 counts[f.code] = counts.get(f.code, 0) + 1
         _dump(d / "segments_flagged.json", [s.model_dump() for s in segments])
@@ -351,6 +459,8 @@ class PilotRun:
                   [("03_vad", "vad.json"), ("04_diarization", "diarization.json"), ("05_asr", "asr_raw.json")]]
         if (self.dir / "05b_normalize" / "normalized.json").exists() and self.providers["normalization"]:
             models.append(ModelInfo(**_load(self.dir / "05b_normalize" / "normalized.json")["model"]))
+        if self.cfg.asr.segmentation == "aligned":
+            models.append(ModelInfo(**_load(self.dir / "05c_align" / "words.json")["model"]))
         speakers = []
         diar = _load(self.dir / "04_diarization" / "diarization.json")["summary"]
         for label in diar["speakers"]:
@@ -371,6 +481,70 @@ class PilotRun:
             segments=segments,
         )
 
+    def gpu_steps(self) -> list[str]:
+        steps = ["04_diarization", "05_asr"]
+        if self.providers["normalization"] is not None:
+            steps.append("05b_normalize")
+        if self.cfg.asr.segmentation == "aligned":
+            steps.append("05c_align")
+        return steps
+
+    def _is_cached(self, step: str) -> bool:
+        p = self.dir / step / "step.json"
+        if step in self.force or "all" in self.force or not p.exists():
+            return False
+        meta = _load(p)
+        return meta.get("digest") == self._digest(step) and meta.get("status") == "ok"
+
+    def _run_gpu_steps_isolated(self) -> None:
+        """Run every GPU step that is not cached in its own fresh process (spawn), in order. Each model then
+        starts from the same clean CUDA state whatever ran before, which makes results independent of step
+        reuse (DECISIONS D-19), and VRAM is fully released when the process exits."""
+        import multiprocessing as mp
+
+        if "all" in self.force:
+            self.force = set(DEPENDS) | {"05c_align"}
+        # cheap CPU steps first, in this process, so every child finds them on disk
+        prep = self.prepare(self.inspect())
+        self.vad(prep)
+        ctx = mp.get_context("spawn")
+        for step in self.gpu_steps():
+            if self._is_cached(step):
+                continue
+            log.info("[%s] running in an isolated process", step)
+            proc = ctx.Process(target=_child_step, args=(self.cfg.model_dump_json(), self.run_id, step,
+                                                         sorted(self.force)))
+            proc.start()
+            proc.join()
+            if proc.exitcode != 0:
+                raise RuntimeError(f"isolated step {step} failed (exit code {proc.exitcode}); see the log above")
+            self.isolated.append(step)
+            # the step is finished on disk now; later steps of this process must not recompute it
+            self.force.discard(step)
+            self.metrics[step] = _load(self.dir / step / "step.json").get("metrics")
+
+    def _steps(self, until: str | None = None):
+        """Steps 01-07 in order (cached steps are loaded). Stops after `until` (used by isolated children)."""
+        info = self.inspect()
+        prep = self.prepare(info)
+        vad = self.vad(prep)
+        regular, exclusive = self.diarization(prep)
+        if until == "04_diarization":
+            return None
+        overlaps = overlap_regions(regular)
+        rows = self.asr(prep, vad, exclusive, overlaps)
+        if until == "05_asr":
+            return None
+        normalized = self.normalize(rows)
+        if until == "05b_normalize":
+            return None
+        words = self.align(prep, rows, normalized) if self.cfg.asr.segmentation == "aligned" else None
+        if until == "05c_align":
+            return None
+        segments = self.attribution(prep, rows, normalized, regular, overlaps, vad, words)
+        segments = self.qc(segments, rows)
+        return info, prep, vad, regular, exclusive, overlaps, rows, normalized, words, segments
+
     def run(self) -> Transcript:
         set_determinism(self.cfg.run.seed)
         started = time.perf_counter()
@@ -380,15 +554,9 @@ class PilotRun:
                                       "config": self.cfg.model_dump(mode="json")})
         hardware_start = {"gpu": gpu_state(), "power": host_power_state()}
 
-        info = self.inspect()
-        prep = self.prepare(info)
-        vad = self.vad(prep)
-        regular, exclusive = self.diarization(prep)
-        overlaps = overlap_regions(regular)
-        rows = self.asr(prep, vad, exclusive, overlaps)
-        normalized = self.normalize(rows)
-        segments = self.attribution(prep, rows, normalized, regular, overlaps, vad)
-        segments = self.qc(segments, rows)
+        if self.cfg.device.isolate_gpu_steps:
+            self._run_gpu_steps_isolated()
+        info, prep, vad, regular, exclusive, overlaps, rows, normalized, words, segments = self._steps()
 
         # 08 export
         d = self._dir("08_export")
@@ -417,6 +585,7 @@ class PilotRun:
             "audio_s": prep["duration_s"],
             "wall_s": round(time.perf_counter() - started, 2),  # this invocation only
             "reused_steps": self.reused,  # results taken from an earlier invocation of the same run id
+            "isolated_gpu_steps": self.isolated,  # computed in this invocation, each in its own process
             "steps_compute_s": round(sum((m or {}).get("load_s", 0) + (m or {}).get("process_s", 0)
                                          for m in self.metrics.values()), 2),
             "hardware_start": hardware_start,
@@ -425,6 +594,13 @@ class PilotRun:
             "steps": self.metrics,
         }
         _dump(self.dir / "metrics.json", metrics)
+        if (self.dir / "reference" / "excerpt.txt").exists():
+            from .score import score_run
+
+            try:
+                score_run(self.dir)  # operator reference available: measure this run automatically
+            except Exception as exc:  # scoring must never hide the transcript; report the failure instead
+                log.error("scoring against the reference failed: %s", exc)
         from .report import write_report
 
         write_report(self.dir, transcript, metrics, reference)
@@ -433,11 +609,28 @@ class PilotRun:
         return transcript
 
 
+def _child_step(cfg_json: str, run_id: str, step: str, force: list[str]) -> None:
+    """Entry point of an isolated GPU step (fresh process): load cached inputs, compute `step`, exit."""
+    import os
+
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+                        datefmt="%H:%M:%S")
+    cfg = PilotConfig.model_validate_json(cfg_json)
+    set_determinism(cfg.run.seed)
+    child = PilotRun(cfg, run_id, force={step} if step in force or "all" in force else set())
+    child._steps(until=step)
+
+
 def compare_transcripts(a: Path, b: Path) -> dict:
     """Determinism check: segment boundaries, speakers and text must match exactly."""
     ta = Transcript.model_validate_json(a.read_text(encoding="utf-8"))
     tb = Transcript.model_validate_json(b.read_text(encoding="utf-8"))
-    key = lambda s: (s.start, s.end, tuple(s.speakers), s.overlap, s.text, s.text_normalized)  # noqa: E731
+    def key(s):
+        words = tuple((w.start, w.end, w.speaker, w.text) for w in s.words) if s.words else None
+        return (s.start, s.end, tuple(s.speakers), s.overlap, s.text, s.text_normalized, words)
     sa, sb = [key(s) for s in ta.segments], [key(s) for s in tb.segments]
     diffs = [i for i, (x, y) in enumerate(zip(sa, sb)) if x != y]
     return {"segments_a": len(sa), "segments_b": len(sb), "identical": sa == sb,

@@ -14,4 +14,8 @@
 | `Local model not found ... loading from the Hub` | Run `uv run speech-to-text download` |
 | Downloads `FacebookAI/xlm-roberta-large` on every first run | `models/xlm-roberta-large/` is missing: run `uv run speech-to-text download` |
 | Too slow | Check the log says "on cuda". For speed over accuracy: `--beams 1 --sigma-fix dict` (~2.5× faster) |
+| Pilot: `pyannote model not found` / `403 requires approval` | Accept the terms at huggingface.co/pyannote/speaker-diarization-community-1, then download it (see [Installation](Installation.md) step 5) |
+| Pilot: `isolated step … failed (exit code …)` | A GPU step crashed in its own process; the error is printed just above. Common cause: CUDA OOM, so lower `asr.batch_size` or the diarization batch sizes in `pilot/config/pilot.yaml` |
+| Pilot: a changed setting doesn't seem to take effect | Steps are reused when their config and upstream outputs are unchanged; after a code change use `--force <step>` or a new `--run-id` |
+| Pilot: `CUDA requested but not available` | The pilot never falls back to CPU silently. Fix the GPU, or set `device.allow_cpu: true` knowingly |
 | Paths with spaces or Greek letters | Quote them: `"data/input/ΓΕΝΙΚΟ ... 11.m4a"` |

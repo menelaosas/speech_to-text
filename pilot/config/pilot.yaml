@@ -18,6 +18,7 @@ input:
 device:
   name: cuda
   allow_cpu: false            # never fall back to CPU silently; a step that needs CPU must say so
+  isolate_gpu_steps: true     # each GPU model runs in its own process: identical CUDA state every run (D-19)
 
 prepare:
   sample_rate: 16000
@@ -46,7 +47,8 @@ asr:
   # turns  = one unit per diarization turn (best attribution, but short units hallucinate)
   # vad    = VAD regions merged up to max_unit_s (most context, but units mix speakers)
   # hybrid = diarization turns, units shorter than min_context_s merged into a neighbour (DECISIONS D-11)
-  segmentation: hybrid
+  # aligned = VAD units (most context), words timed by CTC alignment, split by speaker (DECISIONS D-17)
+  segmentation: aligned
   num_beams: 4                # measured on Greek FLEURS: WER 9.15% (greedy) -> 8.86% (4 beams)
   batch_size: 4
   max_new_tokens: 256
@@ -67,6 +69,17 @@ normalization:
   dtype: float16
   window_words: 8
   batch_size: 64
+
+alignment:
+  # Greek CTC model used only to time words already written by Cohere (asr.segmentation: aligned) and to
+  # time the operator's reference for DER. It never produces transcript text.
+  model_id: jonatasgrosman/wav2vec2-large-xlsr-53-greek
+  model_path: ../models/wav2vec2-large-xlsr-53-greek
+  window_s: 20.0              # emissions computed in windows of this length...
+  context_s: 1.0              # ...with this much context on each side
+  split_pause_s: 2.0          # aligned mode: start a new segment after a pause this long
+  snap_to_sentence_words: 3   # aligned mode: move a speaker change to a sentence end within this many words
+  min_word_score: 0.15        # segments whose mean word alignment score is below this are flagged
 
 attribution:
   overlap_min_s: 0.5          # mark a segment as overlap if >= this many seconds have 2+ active speakers
@@ -92,3 +105,6 @@ qc:
 reference:
   excerpt_min_s: 180
   excerpt_max_s: 300
+  # The operator transcribed this excerpt by hand; every run reuses it and is scored against it
+  # automatically (WER/CER, cpWER, DER). Set to null to choose a new excerpt.
+  reuse_dir: runs/final/reference

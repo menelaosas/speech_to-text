@@ -69,20 +69,39 @@ The best margin depends on whether the model dropped the ς:
 On the 78.5-minute meeting recording: 79 s in total (~60× real time). The share of words ending in ς
 went from 5.0% (dict) to 10.5% (lm).
 
+## Measured on the real recording
+
+The operator transcribed 3.5 minutes of the meeting recording by hand (00:31:38–00:35:08, 571 words,
+7 speakers). Scored with the pilot pipeline ([Pilot](Pilot.md)) and a documented Greek normaliser
+(lowercase, no tonos/dialytika, ς→σ, numbers to words, no punctuation):
+
+| Measured | Result |
+| --- | --- |
+| WER raw Cohere output | 42.0% |
+| WER with ς restoration (`lm`) | 37.0% (30 fewer word errors) |
+| BF16 (GPU) vs FP32 (CPU), same audio pieces | 44.1% vs 44.3%: no loss from BF16 |
+| Beam 4 vs greedy | 39.1% vs 39.6% |
+| Long pieces (VAD, ≤30 s) vs short speaker turns | 35.9% vs 38.9%: short pieces lose words |
+
+So on conversational audio, about 4 in 10 words differ from the hand transcript. About 22 of the 561
+reference words are typing slips, so part of that comes from the reference. The ς restoration is the
+largest single gain measured on this audio.
+
 ## Caveats
 
-- FLEURS is clean read speech, so real meeting audio has a much higher error rate. There is no
-  reference transcript for the meeting recording, so its accuracy has not been measured.
+- FLEURS is clean read speech; the meeting recording scores far worse (37% vs 8.8% WER). The real
+  recording has been measured on **one** 3.5-minute excerpt only.
 - FLEURS sentences come from Wikipedia, which XLM-R may have seen in training, so the ς numbers may
   be slightly optimistic.
 - Names that aren't in the word list never get a ς (e.g. "Βαδριανό").
 
 ## Ideas not yet implemented
 
-- **Own reference transcripts**: hand-correct 5–10 minutes of a real recording and add it to
-  `evaluate.py`. This is the only way to measure accuracy on the audio that matters.
+- **A second reference excerpt** of the real recording, to confirm the numbers above (done once; see
+  [Pilot](Pilot.md)).
 - **Fine-tuning** (LoRA) of Cohere Transcribe on Greek conversational speech with correct ς. This
   would fix the root cause but needs labelled data and a lot of work.
 - **LLM proof-reading** of the transcript for names and terms. Strong, but sending transcripts to a
   cloud API may not be acceptable for sensitive recordings. A local LLM would need a bigger GPU.
-- **Voice activity detection** (Silero VAD) for cleaner segment boundaries.
+- ~~Voice activity detection~~, ~~speaker diarization~~, ~~word timestamps~~: implemented in the
+  [pilot](Pilot.md).

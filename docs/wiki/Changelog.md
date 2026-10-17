@@ -1,5 +1,17 @@
 # Changelog
 
+## Pilot 0.1 (2026-10-17): Judicial Speech AI pilot (`pilot/`)
+
+- New pinned project: Silero VAD, pyannote community-1 diarization, Cohere ASR, attribution, quality flags,
+  JSON/TXT/SRT/RTTM export, report, SHA-256 integrity check, one command for steps 1–9
+- Raw Cohere text canonical; ς restoration kept as a separate layer; repetition loops and known
+  hallucination phrases flagged, never removed
+- Scored against the operator's hand transcript: WER 42.0% raw / 37.0% ς layer
+- Word timestamps by Greek CTC forced alignment, words split by speaker: cpWER 81.8% → 61.7%
+- DER 36.6% against the operator's labels with aligned times; pyannote over-marks overlap relative to it
+- Every GPU step in its own process (deterministic word times); cache invalidates downstream steps
+- New wiki page: [Pilot](Pilot.md); Accuracy, Known Issues, Installation, Troubleshooting, Development updated
+
 ## 0.2.0 (2026-10-16): accuracy
 
 - Beam search (4 beams) by default: `--beams`

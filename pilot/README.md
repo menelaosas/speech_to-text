@@ -25,7 +25,11 @@ uv run speech-pilot run --excerpt 0:600 --run-id excerpt-10min
 uv run speech-pilot run --run-id full               # the whole file: steps 1-9 (= scripts/run_pilot.py)
 uv run speech-pilot compare runs/full runs/full-repeat   # determinism check
 uv run speech-pilot report --run runs/full          # rebuild REPORT.md (e.g. after compare)
-uv run speech-pilot score --run runs/full           # after the operator writes reference/excerpt.txt
+uv run speech-pilot run --run-id pilot-final         # current deliverable (aligned mode, auto-scored)
+uv run speech-pilot score --run runs/final --numbered "runs/final/reference/manually transcripted.txt"
+uv run speech-pilot align-reference --run runs/final # time the operator's lines -> excerpt.rttm (DER)
+uv run speech-pilot score --run runs/X --reference runs/final/reference   # score any run on the reference
+uv run python scripts/compare_on_reference.py --run runs/final   # measure pipeline choices on the reference
 ```
 
 `--set key=value` overrides config values (e.g. `--set asr.segmentation=vad`). Re-running with the same
@@ -35,14 +39,14 @@ uv run speech-pilot score --run runs/full           # after the operator writes 
 
 | File | Content |
 | --- | --- |
-| `transcript.json` | canonical transcript: segments, speakers, overlap, flags, provenance, models, config, SHA-256 |
+| `transcript.json` | canonical transcript: segments (with word timestamps), speakers, overlap, flags, provenance, models, config, SHA-256 |
 | `transcript.txt` | `[00:12:31 – 00:12:44] SPEAKER_02: ...` (raw text) |
 | `transcript.normalized.txt` | same with Greek final ς restored (machine-normalised, not canonical) |
 | `transcript.srt` | subtitles with speaker labels |
 | `diarization.rttm` | overlap-aware diarization |
 | `metrics.json` | per-step device, timings, VRAM, RTF, GPU/power state |
 | `REPORT.md` | summary, flags, 10 most suspicious segments, tested vs not tested |
-| `reference/` | excerpt for manual transcription + instructions |
+| `reference/` | operator's reference excerpt (reused by every run) + `score.json` (WER/CER, cpWER, DER) |
 | `01_inspect/` … `09_integrity/` | raw outputs of every step (rebuild without re-running models) |
 
 ## Documents

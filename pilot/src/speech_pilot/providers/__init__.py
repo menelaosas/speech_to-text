@@ -17,6 +17,7 @@ __all__ = [
 def build_providers(cfg):
     """Instantiate the providers named in the config (imports are lazy so tests stay light)."""
     from .cohere_asr import CohereASR
+    from .ctc_aligner import CtcAligner
     from .pyannote_diarization import PyannoteDiarization
     from .silero_vad import SileroVAD
     from .xlmr_sigma import XlmrSigmaRestorer
@@ -27,4 +28,5 @@ def build_providers(cfg):
         "diarization": PyannoteDiarization(cfg.diarization, device),
         "asr": CohereASR(cfg.asr, device),
         "normalization": XlmrSigmaRestorer(cfg.normalization, device) if cfg.normalization.greek_final_sigma else None,
+        "alignment": CtcAligner(cfg.alignment, device),
     }

@@ -61,6 +61,18 @@ def number_to_words(n: int) -> str:
     return " ".join(words)
 
 
+# Variant only (not part of the spec normaliser): hesitations that ASR does not write.
+FILLERS = {"ε", "εμ", "εμμ", "μμ", "αα", "εε", "χμ"}
+
+
+def normalize_lenient(text: str, numbers: bool = True) -> str:
+    """Spec normaliser + typing conventions of a hand transcript: letters held 3+ times collapse to one
+    ("τοοοο" -> "το", "εεεεε" -> "ε") and hesitation tokens are removed."""
+    words = normalize(text, numbers).split()
+    words = [re.sub(r"(.)\1{2,}", r"\1", w) for w in words]
+    return " ".join(w for w in words if w not in FILLERS)
+
+
 def normalize(text: str, numbers: bool = True) -> str:
     text = unicodedata.normalize("NFD", text.lower())
     text = "".join(c for c in text if not unicodedata.combining(c))

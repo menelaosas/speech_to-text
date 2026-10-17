@@ -49,7 +49,25 @@ uv run speech-to-text download --skip-sigma-model  # only Cohere Transcribe (non
 The tool always prefers these local copies. If one is missing, it falls back to downloading into the
 Hugging Face cache.
 
-## 5. (Optional) Evaluation data
+## 5. (Optional) Pilot: speaker-attributed pipeline
+
+The [pilot](Pilot.md) has its own environment (`cd pilot && uv sync`) and needs two more models:
+
+| Model | Folder | Size | Notes |
+| --- | --- | --- | --- |
+| pyannote/speaker-diarization-community-1 | `models/pyannote-speaker-diarization-community-1/` | 33 MB | **gated**: accept the terms on Hugging Face first |
+| jonatasgrosman/wav2vec2-large-xlsr-53-greek | `models/wav2vec2-large-xlsr-53-greek/` | 2.4 GB on disk | word timing only |
+
+```bash
+cd pilot
+uv run hf download pyannote/speaker-diarization-community-1 --local-dir ../models/pyannote-speaker-diarization-community-1
+uv run hf download jonatasgrosman/wav2vec2-large-xlsr-53-greek --revision 489b34fb35fc5876af6193d419772cb9d6d1d531 \
+    --local-dir ../models/wav2vec2-large-xlsr-53-greek
+```
+
+The pilot runs offline after that (`HF_HUB_OFFLINE=1` is set by its CLI).
+
+## 6. (Optional) Evaluation data
 
 To run the accuracy benchmarks in `scripts/evaluate.py` (see [Accuracy](Accuracy.md)):
 

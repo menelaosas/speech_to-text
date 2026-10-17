@@ -35,10 +35,29 @@ def choose_excerpt(t: Transcript, cfg: ReferenceCfg) -> dict | None:
     return best
 
 
+REUSED_FILES = ("excerpt.wav", "excerpt.json", "excerpt.txt", "excerpt.rttm", "excerpt_alignment.json",
+                "excerpt_import.json", "README.md")
+
+
 def export_reference(t: Transcript, cfg: ReferenceCfg, original: Path, out_dir: Path) -> dict | None:
+    if cfg.reuse_dir is not None and (cfg.reuse_dir / "excerpt.json").exists() and \
+            cfg.reuse_dir.resolve() != out_dir.resolve():
+        import shutil
+
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for name in REUSED_FILES:
+            if (cfg.reuse_dir / name).exists():
+                shutil.copy2(cfg.reuse_dir / name, out_dir / name)
+        for p in cfg.reuse_dir.glob("*.txt"):  # the operator's original transcript file(s), copied unchanged
+            if p.name not in REUSED_FILES and not p.name.startswith("hypothesis"):
+                shutil.copy2(p, out_dir / p.name)
+        choice = json.loads((out_dir / "excerpt.json").read_text(encoding="utf-8"))
+        choice["reused_from"] = str(cfg.reuse_dir)
+        return choice
     choice = choose_excerpt(t, cfg)
     if choice is None:
         return None
+    choice["source_run"] = t.run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     # Segment times are absolute times in the original file, so the excerpt is cut from the original.
     choice["ffmpeg"] = export_excerpt(original, out_dir / "excerpt.wav", choice["start_s"], choice["end_s"])

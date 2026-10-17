@@ -20,5 +20,8 @@ data/output/*
 !data/input/.gitkeep
 !data/output/.gitkeep
 
+# Downloaded evaluation datasets and their caches
+data/eval/
+
 # Pilot run outputs (derived from evidence; not committed)
 pilot/runs/

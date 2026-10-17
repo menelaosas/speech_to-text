@@ -47,5 +47,27 @@
 - [x] REPORT.md separates tested from not tested.
 - [x] Reference excerpt exported (section 7).
 
+## Reference scoring (operator transcript received)
+
+- [x] Imported `manually transcripted.txt` → `reference/excerpt.txt` (source file only read; hash checked).
+- [x] **WER 42.0% raw / 36.8% ς layer, CER 22.7% / 21.7%** on 571 words (spec normaliser, numbers to words).
+      Variants with lenient normaliser and numbers as written in REPORT.md.
+- [x] Measured the open choices on the excerpt (D-16): BF16 = FP32, beam 4 slightly better than greedy,
+      hybrid kept, min_context unchanged. DER not computed (no speaker timings in the reference).
+- [x] REPORT.md now has a *Measured accuracy* section and updated recommendations.
+
+## Improvements 1 + 2 (operator request: word timestamps, DER)
+
+- [x] **Greek CTC aligner** (own Viterbi; `jonatasgrosman/wav2vec2-large-xlsr-53-greek`, timing only). 10,985 of
+      11,099 tokens aligned on the full file, 41 s on GPU, 1.6 GB peak.
+- [x] **Aligned mode** (D-17, now default): long VAD units → words timed → split by speaker, speaker changes
+      snapped to sentence ends. **cpWER 81.8% → 61.7%** at the same WER (37.0% ς layer).
+- [x] **DER** (D-18): reference RTTM from the operator's labels + forced-alignment times. **DER 36.6%**
+      (collar 0.25 s); 26.8% with exclusive diarization: pyannote marks 7.5× the reference's overlap.
+- [x] Fixed: RTTM loader dropped overlapping reference turns; cache did not invalidate after an upstream
+      recompute (D-20); 20 ms word-time non-determinism → GPU steps in isolated processes (D-19).
+- [x] **Deliverable: `runs/pilot-final/`** (fresh, 321 s wall, all steps computed, identical to
+      `pilot-final-repeat`, SHA unchanged, auto-scored against the operator reference). 26 tests pass.
+
 **Stopped here as instructed.** Waiting for the operator: hand transcript of `reference/excerpt.wav`, speaker
 count if known, and approval before anything beyond the pilot. Stretch steps A/B not started.

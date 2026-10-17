@@ -29,3 +29,24 @@ def test_numbers_optional():
 def test_auto_margin():
     assert auto_margin(["Σα ευχαριστώ για το χρόνο σα όμω"])[0] < 0
     assert auto_margin(["Σας ευχαριστώ για τον χρόνο σας, όμως της είπα"])[0] > 0
+
+
+def test_lenient_normalizer_handles_hand_transcript_conventions():
+    from speech_pilot.greek_text import normalize_lenient
+
+    assert normalize_lenient("εεεεε στην λάρισα") == "στην λαρισα"
+    assert normalize_lenient("ανάλογα τοοοο αδίκημα") == "αναλογα το αδικημα"
+    assert normalize_lenient("αλλά εκκλησία") == "αλλα εκκλησια"  # real double letters are kept
+
+
+def test_import_numbered_reference(tmp_path):
+    from speech_pilot.score import import_numbered_reference, parse_reference
+
+    src = tmp_path / "manual.txt"
+    src.write_text("1 καλημέρα\n12 ναι ναι\n2 εντάξει\nχωρίς αριθμό\n", encoding="utf-8")
+    before = src.read_bytes()
+    info = import_numbered_reference(src, tmp_path / "excerpt.txt")
+    assert src.read_bytes() == before  # the operator's file is only read
+    assert info["speakers"] == ["1", "2"] and info["overlap_labels"] == {"12": "1+2"}
+    assert parse_reference(tmp_path / "excerpt.txt") == [
+        ("1", "καλημέρα"), ("1+2", "ναι ναι"), ("2", "εντάξει"), ("?", "χωρίς αριθμό")]

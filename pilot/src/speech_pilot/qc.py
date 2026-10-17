@@ -19,6 +19,7 @@ WEIGHTS = {
     "words_per_second_low": 2.0,
     "speaker_uncertain": 1.0,
     "no_diarized_speaker": 1.5,
+    "low_alignment_confidence": 1.5,
     "overlap": 0.5,
 }
 
@@ -40,7 +41,8 @@ def repetition(text: str, min_repeats: int) -> str | None:
     return None
 
 
-def flag_segment(seg: Segment, cfg: QcCfg, max_new_tokens: int, n_tokens: int) -> list[Flag]:
+def flag_segment(seg: Segment, cfg: QcCfg, max_new_tokens: int, n_tokens: int,
+                 min_word_score: float | None = None) -> list[Flag]:
     flags: list[Flag] = []
     words = len(_WORD.findall(seg.text))
     duration = seg.end - seg.start
@@ -70,6 +72,12 @@ def flag_segment(seg: Segment, cfg: QcCfg, max_new_tokens: int, n_tokens: int) -
     if n_tokens >= max_new_tokens:
         flags.append(Flag(code="possible_truncation", severity="warning",
                           detail=f"generation hit max_new_tokens={max_new_tokens}"))
+    if seg.words and min_word_score is not None:
+        aligned = [w.score for w in seg.words if w.aligned]
+        mean = sum(aligned) / len(aligned) if aligned else 0.0
+        if mean < min_word_score:
+            flags.append(Flag(code="low_alignment_confidence", severity="warning",
+                              detail=f"mean word alignment score {mean:.2f}: word times and speaker split uncertain"))
     if seg.primary_speaker is None:
         flags.append(Flag(code="no_diarized_speaker", severity="warning",
                           detail="VAD found speech here but diarization assigned no speaker"))

@@ -25,7 +25,7 @@ class SpeakerTurn(Interval):
 
 
 class ModelInfo(BaseModel):
-    role: Literal["vad", "diarization", "asr", "normalization"]
+    role: Literal["vad", "diarization", "asr", "normalization", "alignment"]
     model_id: str
     local_path: str | None
     revision: str | None
@@ -45,11 +45,22 @@ class SpeakerShare(BaseModel):
     seconds: float
 
 
+class Word(BaseModel):
+    text: str  # raw token as written by the ASR
+    text_normalized: str | None = None
+    start: float
+    end: float
+    score: float  # alignment confidence (mean CTC frame probability)
+    aligned: bool  # False: no alignable characters, time interpolated
+    speaker: str | None
+
+
 class Provenance(BaseModel):
     asr_unit_id: str
     asr_model: str
     asr_revision: str | None
-    segmentation: Literal["turns", "vad", "hybrid"]
+    segmentation: Literal["turns", "vad", "hybrid", "aligned"]
+    alignment_model: str | None = None
     decoding: dict[str, int | float | bool | str]
     diarization_model: str | None
     diarization_revision: str | None
@@ -72,6 +83,7 @@ class Segment(BaseModel):
     text_normalized: str | None = None  # machine-normalised layer (e.g. Greek final ς), not canonical
     normalization_changes: int = 0
     flags: list[Flag] = Field(default_factory=list)
+    words: list[Word] | None = None  # word timestamps (aligned mode only)
     provenance: Provenance
 
 

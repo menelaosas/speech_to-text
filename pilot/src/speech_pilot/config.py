@@ -40,6 +40,7 @@ class InputCfg(Strict):
 class DeviceCfg(Strict):
     name: str
     allow_cpu: bool
+    isolate_gpu_steps: bool = True
 
 
 class PrepareCfg(Strict):
@@ -69,7 +70,7 @@ class AsrCfg(Strict):
     model_id: str
     model_path: Path
     dtype: Literal["bfloat16", "float16", "float32"]
-    segmentation: Literal["turns", "vad", "hybrid"]
+    segmentation: Literal["turns", "vad", "hybrid", "aligned"]
     num_beams: int
     batch_size: int
     max_new_tokens: int
@@ -92,6 +93,16 @@ class NormalizationCfg(Strict):
     batch_size: int
 
 
+class AlignmentCfg(Strict):
+    model_id: str
+    model_path: Path
+    window_s: float
+    context_s: float
+    split_pause_s: float
+    snap_to_sentence_words: int
+    min_word_score: float
+
+
 class AttributionCfg(Strict):
     overlap_min_s: float
     overlap_min_fraction: float
@@ -111,6 +122,7 @@ class QcCfg(Strict):
 class ReferenceCfg(Strict):
     excerpt_min_s: float
     excerpt_max_s: float
+    reuse_dir: Path | None = None  # reuse an existing (operator-transcribed) reference instead of choosing one
 
 
 class PilotConfig(Strict):
@@ -122,6 +134,7 @@ class PilotConfig(Strict):
     diarization: DiarizationCfg
     asr: AsrCfg
     normalization: NormalizationCfg
+    alignment: AlignmentCfg
     attribution: AttributionCfg
     qc: QcCfg
     reference: ReferenceCfg
@@ -151,4 +164,7 @@ def load_config(path: Path = DEFAULT_CONFIG, overrides: dict | None = None) -> P
     cfg.diarization.model_path = _resolve(cfg.diarization.model_path, base)
     cfg.asr.model_path = _resolve(cfg.asr.model_path, base)
     cfg.normalization.model_path = _resolve(cfg.normalization.model_path, base)
+    cfg.alignment.model_path = _resolve(cfg.alignment.model_path, base)
+    if cfg.reference.reuse_dir is not None:
+        cfg.reference.reuse_dir = _resolve(cfg.reference.reuse_dir, base)
     return cfg

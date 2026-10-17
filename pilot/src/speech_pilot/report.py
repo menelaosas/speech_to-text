@@ -23,10 +23,21 @@ def write_report(run_dir: Path, t: Transcript, metrics: dict, reference: dict | 
     segs = t.segments
     excerpt = t.source.excerpt
 
+    score_path = run_dir / "reference" / "score.json"
+    score = json.loads(score_path.read_text(encoding="utf-8")) if score_path.exists() else None
     L = [f"# Pilot report — run `{t.run_id}`", ""]
-    L += ["> **Accuracy has not been measured.** No human reference transcript exists yet. Nothing in this "
-          "report says the transcript is correct; it reports what ran, how long it took and where a "
-          "reviewer should listen first.", ""]
+    if score:
+        s_raw = score["scores"]["raw/spec/numbers_to_words"]
+        s_sig = score["scores"].get("sigma_normalized/spec/numbers_to_words")
+        L += [f"> **Accuracy was measured on one reference excerpt only** "
+              f"({hms(score['excerpt']['start_s'])}–{hms(score['excerpt']['end_s'])}, "
+              f"{s_raw['ref_words']} reference words): WER **{100 * s_raw['wer']:.1f}%** on the raw text"
+              + (f", **{100 * s_sig['wer']:.1f}%** on the ς-normalised layer" if s_sig else "")
+              + ". The rest of the file is not measured. See *Measured accuracy* below.", ""]
+    else:
+        L += ["> **Accuracy has not been measured.** No human reference transcript exists yet. Nothing in this "
+              "report says the transcript is correct; it reports what ran, how long it took and where a "
+              "reviewer should listen first.", ""]
 
     L += ["## Input and integrity", "",
           "| Item | Value |", "| --- | --- |",
@@ -78,8 +89,16 @@ def write_report(run_dir: Path, t: Transcript, metrics: dict, reference: dict | 
     L.append("")
 
     us = asr["unit_stats"]
-    if asr["segmentation"] == "vad":
+    if asr["segmentation"] in ("vad", "aligned"):
         seg_line = f"{us['units']} units from {us.get('vad_regions_in')} VAD regions."
+        words_path = run_dir / "05c_align" / "words.json"
+        if asr["segmentation"] == "aligned" and words_path.exists():
+            ws = json.loads(words_path.read_text(encoding="utf-8"))
+            st, am = ws["stats"], ws["model"]
+            seg_line += (f" Words timed by CTC forced alignment ({am['model_id']} `{am['revision']}`, used for timing "
+                         f"only): {st['aligned_words']} of {st['words']} tokens aligned, mean score {st['mean_score']}, "
+                         f"{st['units_failed']} units failed. Each unit is split into segments of consecutive words by "
+                         "the same speaker (DECISIONS D-17).")
     else:
         seg_line = (f"{us['units']} units from {us.get('turns_in')} exclusive diarization turns; "
                     f"{us.get('merged_across_overlap', 0)} merges across overlap boundaries")
@@ -103,7 +122,8 @@ def write_report(run_dir: Path, t: Transcript, metrics: dict, reference: dict | 
     L += ["## ASR", "",
           f"- Cohere Transcribe `{asr['model']['revision']}`, language `{t.language}`, {asr['model']['dtype']} on "
           f"{asr['model']['device']}; decoding {asr['decoding']}.",
-          f"- Segmentation: **{asr['segmentation']}** (see DECISIONS.md D-11). " + seg_line,
+          f"- Segmentation: **{asr['segmentation']}** (see DECISIONS.md "
+          f"{'D-17' if asr['segmentation'] == 'aligned' else 'D-11'}). " + seg_line,
           f"- Segments in transcript: {len(segs)}; overlap segments: {sum(s.overlap for s in segs)}; "
           f"uncertain speaker: {sum(s.speaker_uncertain for s in segs)}.", ""]
     if norm:
@@ -136,6 +156,58 @@ def write_report(run_dir: Path, t: Transcript, metrics: dict, reference: dict | 
     else:
         L += ["No window of 3–5 minutes with two or more speakers was found.", ""]
 
+    if score:
+        L += ["## Measured accuracy (reference excerpt)", "",
+              f"Reference: operator's hand transcript ({score['speakers']['reference_count']} speakers, "
+              f"{score['speakers']['reference_overlap_turns']} turns marked as two people at once). "
+              f"Diarization had {len(score['speakers']['diarization_any'])} labels active in the window "
+              f"({len(score['speakers']['diarization_primary'])} as main speaker).", "",
+              "| Text layer | Normaliser | Numbers | WER | CER | Sub | Del | Ins | Ref words |",
+              "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+        for key, v in score["scores"].items():
+            layer, normaliser, numbers = key.split("/")
+            L.append(f"| {layer} | {normaliser} | {numbers.replace('_', ' ')} | {100 * v['wer']:.1f}% | "
+                     f"{100 * v['cer']:.1f}% | {v['substitutions']} | {v['deletions']} | {v['insertions']} | "
+                     f"{v['ref_words']} |")
+        rq = score["reference_quality"]
+        L += ["", f"Normalisers: *spec* = {score['normalizers']['spec']}; *lenient* = {score['normalizers']['lenient']}.", "",
+              f"**Reference quality:** {rq['not_in_greek_word_list']} of {rq['words']} reference words are not in the "
+              f"Greek word list (typing slips such as `{'`, `'.join(rq['examples'][7:10])}`, cut-off words, rare terms). "
+              "They were not corrected; up to that many errors may come from the reference, not the model.", "",
+              ]
+        if "cpwer" in score:
+            c = score["cpwer"]
+            mapped = ", ".join(f"{k}→{v}" for k, v in c["mapping"].items() if v)
+            L += [f"**Speaker-attributed WER (cpWER): {100 * c['cpwer']:.1f}%** ({c['errors']} errors / "
+                  f"{c['ref_words']} reference words). Words and speakers are scored together: text is concatenated "
+                  f"per speaker and speakers are matched one-to-one. Matching: {mapped}.", ""]
+        if isinstance(score["der"], dict):
+            L += [f"**DER** (reference: {score['der']['reference']}):", "",
+                  "| Collar | Overlap scored | DER | Missed | False alarm | Confusion |", "| --- | --- | --- | --- | --- | --- |"]
+            for key, v in score["der"].items():
+                if key == "reference":
+                    continue
+                collar, skip = key.split("_")[1], key.endswith("True")
+                L.append(f"| {collar} s | {'no' if skip else 'yes'} | {100 * v['der']:.1f}% | {100 * v['missed']:.1f}% | "
+                         f"{100 * v['false_alarm']:.1f}% | {100 * v['confusion']:.1f}% |")
+            L.append("")
+        else:
+            L += [f"**DER:** {score['der']}", ""]
+        comp_path = run_dir / "reference" / "comparison.json"
+        if comp_path.exists():
+            comp = json.loads(comp_path.read_text(encoding="utf-8"))
+            L += ["### Pipeline choices measured on the same excerpt", "",
+                  "| Variant | WER raw | WER ς layer | Deletions |", "| --- | --- | --- | --- |"]
+            for name, v in comp["variants"].items():
+                L.append(f"| {name} | {100 * v['raw']['wer']:.1f}% | {100 * v['sigma']['wer']:.1f}% | {v['sigma']['del']} |")
+            if "precision" in comp:
+                pr = comp["precision"]
+                L += ["", f"BF16 (GPU) vs FP32 (CPU) on the same {pr['units']} units: WER "
+                      f"{100 * pr['bf16_gpu_raw']['wer']:.1f}% vs {100 * pr['fp32_cpu_raw']['wer']:.1f}% (raw), "
+                      f"{pr['identical_units']}/{pr['units']} units identical: no accuracy loss from BF16."]
+            L += ["", "Differences of about 1 point are ~6 words on this excerpt and are within noise for a single "
+                  "3.5-minute sample. Decisions in DECISIONS.md D-16.", ""]
+
     det_path = run_dir / "determinism.json"
     det = json.loads(det_path.read_text()) if det_path.exists() else None
     L += ["## Determinism", ""]
@@ -147,19 +219,35 @@ def write_report(run_dir: Path, t: Transcript, metrics: dict, reference: dict | 
     else:
         L += ["Not checked yet (`uv run speech-pilot compare runs/<a> runs/<b>`).", ""]
 
-    L += ["## Tested vs not tested", "",
+    measured_note = (
+        "**Measured:** WER/CER, speaker-attributed cpWER and DER on one 3.5-minute reference excerpt "
+        "(tables above). " if score else "")
+    L += ["## Tested vs not tested", "", measured_note +
           "**Tested:** the pipeline ran end to end with one command; the devices above were recorded per step "
           "(Cohere and pyannote on CUDA, Silero VAD on CPU by design); VRAM returned to baseline after each "
           "GPU model; the original file's SHA-256 is unchanged; all outputs were written and transcript.json "
           "re-validates against the schema"
           + ("; a second run produced the same transcript." if det and det["identical"] else "."), "",
-          "**Not tested:** transcription accuracy (WER/CER), diarization accuracy (DER), whether the "
-          f"{len(diar['speakers'])} speaker labels correspond to {len(diar['speakers'])} real people, whether the "
-          "overlap regions are real, and the quality of the ς-normalised layer on this recording. "
-          "These need the reference excerpt. BF16 vs FP32 accuracy is also open (DECISIONS D-09).", ""]
+          ("**Not tested:** accuracy outside the 3.5-minute excerpt; "
+           + ("DER against hand-marked times (the reference times come from forced alignment, D-18); "
+              if isinstance(score.get("der"), dict) else "diarization accuracy (DER, needs reference speaker timings); ")
+           + f"whether the {len(diar['speakers'])} labels over the whole file are "
+           f"{len(diar['speakers'])} different people (the excerpt reference has "
+           f"{score['speakers']['reference_count']} speakers, diarization used "
+           f"{len(score['speakers']['diarization_any'])} labels there, but which label is which person was not "
+           "checked); whether the overlap regions are real." if score else
+           "**Not tested:** transcription accuracy (WER/CER), diarization accuracy (DER), whether the "
+           f"{len(diar['speakers'])} speaker labels correspond to {len(diar['speakers'])} real people, whether the "
+           "overlap regions are real, and the quality of the ς-normalised layer on this recording. "
+           "These need the reference excerpt. BF16 vs FP32 accuracy is also open (DECISIONS D-09)."), ""]
 
     rec = []
-    if not t.config["input"]["num_speakers"]:
+    if not t.config["input"]["num_speakers"] and score:
+        rec.append(f"Speaker count: the operator heard {score['speakers']['reference_count']} speakers in the "
+                   f"3.5-minute excerpt alone, so pyannote's estimate of {len(diar['speakers'])} for the whole file is "
+                   "plausible. If the total is known, set `input.num_speakers` and re-run (steps 04 onward are "
+                   "recomputed automatically).")
+    elif not t.config["input"]["num_speakers"]:
         rec.append(f"Confirm how many people speak. pyannote estimated {len(diar['speakers'])}; the smallest "
                    f"label has {min(diar['speaking_time_s'].values()):.0f} s of speech. If the count is known, set "
                    "`input.num_speakers` and re-run (steps 04 onward are recomputed automatically).")
@@ -171,9 +259,29 @@ def write_report(run_dir: Path, t: Transcript, metrics: dict, reference: dict | 
     if norm and norm["raw_sigma_rate"] < 0.05:
         rec.append("The raw text has almost no final ς (upstream model bug). Read `transcript.normalized.txt` for "
                    "comprehension, and cite the raw `transcript.txt`/`.json` as the canonical machine output.")
-    rec.append("Transcribe `reference/excerpt.wav` by hand (and optionally its RTTM), then run "
-               "`speech-pilot score`: this is the only way to turn the open questions above into measurements.")
-    rec.append("Stretch steps after scoring: DeepFilterNet3 on a noisy excerpt (compare WER with/without), and "
-               "Greek CTC forced alignment for word timestamps on a short excerpt.")
+    der = score.get("der") if score else None
+    if score and isinstance(der, dict):
+        d = der.get("collar_0.25_skip_overlap_False", {})
+        rec.append(f"Overlap: against the reference, {100 * d.get('false_alarm', 0):.0f}% of the DER is false alarm, "
+                   "mostly overlap that pyannote marks and the operator did not (DECISIONS D-18; exclusive "
+                   "diarization scores DER 26.8% vs 36.6%). Listen to a sample of `[OVERLAP]` segments to decide "
+                   "whether pyannote over-detects or the reference under-marks, before changing overlap thresholds.")
+        rec.append("Fix or confirm the typing slips listed in `reference/score.json` so WER reflects only the model.")
+    elif score:
+        rec.append("On the excerpt, shorter ASR units lost more words (up to 105 deletions with short turn units vs "
+                   "77–78 with longer units), while the remaining errors are mostly substitutions. To get both "
+                   "long-unit context and per-speaker text, transcribe longer units and split the words by "
+                   "diarization turn using word timestamps (Greek CTC forced alignment, stretch step B). This is "
+                   "the most promising next experiment.")
+        rec.append("Add reference speaker timings (`reference/excerpt.rttm`) to measure DER, and fix the typing "
+                   "slips listed in `reference/score.json` (or confirm them) so WER reflects only the model.")
+        rec.append("Transcribe a second excerpt (different speakers / less overlap) to confirm the numbers. "
+                   "Every choice so far was checked on one 3.5-minute sample.")
+        rec.append("Stretch step A: DeepFilterNet3 on a noisy excerpt, scored against the same reference.")
+    else:
+        rec.append("Transcribe `reference/excerpt.wav` by hand (and optionally its RTTM), then run "
+                   "`speech-pilot score`: this is the only way to turn the open questions above into measurements.")
+        rec.append("Stretch steps after scoring: DeepFilterNet3 on a noisy excerpt (compare WER with/without), and "
+                   "Greek CTC forced alignment for word timestamps on a short excerpt.")
     L += ["## Recommendations for the next step", ""] + [f"{i}. {r}" for i, r in enumerate(rec, 1)] + [""]
     (run_dir / "REPORT.md").write_text("\n".join(L), encoding="utf-8")
