@@ -52,6 +52,10 @@ asr:
   num_beams: 4                # measured on Greek FLEURS: WER 9.15% (greedy) -> 8.86% (4 beams)
   batch_size: 4
   max_new_tokens: 256
+  retry_truncated: true      # retry only when generation stops at the token budget without EOS
+  retry_max_new_tokens: 512  # one retry, one unit at a time; model decoder capacity is respected
+  num_candidates: 1         # experimental: set 4 with candidate_selection=consensus to compare beams
+  candidate_selection: best # best | consensus; benchmark consensus before adopting it
   max_unit_s: 30.0            # Cohere clips are limited to 35 s; stay below to avoid internal re-chunking
   split_search_s: 5.0         # look for the quietest point in the last N s before max_unit_s
   merge_gap_s: 0.5            # merge consecutive same-speaker turns closer than this

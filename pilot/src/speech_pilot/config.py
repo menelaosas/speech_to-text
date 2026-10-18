@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 PILOT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = PILOT_ROOT / "config" / "pilot.yaml"
@@ -82,6 +82,20 @@ class AsrCfg(Strict):
     context_merge_gap_s: float
     vad_fill_min_s: float
     punctuation: bool
+    num_candidates: int = Field(default=1, ge=1, le=8)
+    candidate_selection: Literal["best", "consensus"] = "best"
+    retry_truncated: bool = True
+    retry_max_new_tokens: int = Field(default=512, ge=1, le=1024)
+
+    @model_validator(mode="after")
+    def validate_decoding(self):
+        if min(self.num_beams, self.batch_size, self.max_new_tokens) < 1:
+            raise ValueError("Beam count, batch size and token budget must be positive")
+        if self.num_candidates > self.num_beams:
+            raise ValueError("num_candidates must not exceed num_beams")
+        if self.candidate_selection == "consensus" and self.num_candidates < 2:
+            raise ValueError("consensus selection requires at least two candidates")
+        return self
 
 
 class NormalizationCfg(Strict):

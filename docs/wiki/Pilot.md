@@ -85,6 +85,9 @@ WER 8.92% (dev) / 9.77% (test), FLEURS 7.42%.
 | D-18 | DER reference = operator labels + aligned times | pyannote marks 7.5× more overlap than the reference |
 | D-19 | Each GPU step in its own process | removes 20 ms word-time differences between runs |
 | D-20 | Cache keys include upstream outputs | a recomputed step invalidates everything after it |
+| D-21 | Benchmarks on Common Voice / FLEURS | CV dev 8.92%, test 9.77%, FLEURS 7.42% WER |
+| D-22 | Parakeet as comparison only; correct token counts; truncation retry | Parakeet 49.2% vs Cohere 42.7% on the excerpt |
+| D-23 | Consensus beam selection stays **off** | worse on CV dev: 8.92% → 9.50% WER (significant) |
 
 ## Open questions
 

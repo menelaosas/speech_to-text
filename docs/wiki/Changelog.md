@@ -1,5 +1,18 @@
 # Changelog
 
+## Decoding safeguards and second-model comparison (2026-10-18)
+
+- Token counts exclude end-of-sequence and batch padding; QC's truncation flag uses the real stop
+  condition (all 191 units of the test recording had padding in their old count)
+- Truncated generation is retried once with a larger budget (bounded by the decoder's 1,024 positions);
+  never needed on the test recording
+- Parakeet TDT v3 as a comparison-only recognizer (`benchmark --parakeet-model`,
+  `scripts/compare_asr_decoding.py`); worse than Cohere, so not used in production
+- Consensus beam selection added as an experiment and **left off**: measured worse on Common Voice dev
+  (8.92% → 9.50% WER, significant)
+- With default settings the output is unchanged (identical CV dev results and identical full-file
+  transcript); 47 pilot tests
+
 ## Benchmarks on Common Voice 27 Greek (2026-10-17)
 
 - Common Voice 27.0 Greek moved into `data/eval/common_voice/` (29,467 clips; dev 1,841 / test 1,842)

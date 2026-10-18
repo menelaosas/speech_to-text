@@ -119,7 +119,8 @@ def summarize(rows: list[dict], layer: str, samples: int, seed: int) -> dict:
 
 
 # ---- run -----------------------------------------------------------------------------------------------------
-def run_benchmark(cfg: PilotConfig, dataset: str, split: str, limit: int | None, name: str | None) -> Path:
+def run_benchmark(cfg: PilotConfig, dataset: str, split: str, limit: int | None, name: str | None,
+                  parakeet_model: Path | None = None) -> Path:
     from .pipeline import set_determinism
     from .providers import AsrUnit, build_providers
 
@@ -147,8 +148,12 @@ def run_benchmark(cfg: PilotConfig, dataset: str, split: str, limit: int | None,
     audio_s = sum(len(a) for a in audio.values()) / SR
 
     providers = build_providers(cfg)
-    asr = providers["asr"]
-    asr.cfg = asr.cfg.model_copy(update={"batch_size": b.asr_batch_size})
+    if parakeet_model is not None:
+        from .providers.parakeet_asr import ParakeetASR
+        asr = ParakeetASR(parakeet_model, cfg.device.name)
+    else:
+        asr = providers["asr"]
+        asr.cfg = asr.cfg.model_copy(update={"batch_size": b.asr_batch_size})
     # Clips longer than the pipeline's unit limit are split at quiet points exactly like the pipeline does
     # (FLEURS has some > 35 s); the pieces' texts are joined back in order.
     units, owner = [], []

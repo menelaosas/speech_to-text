@@ -150,7 +150,8 @@ def cmd_benchmark(args) -> int:
     from .benchmark import run_benchmark
 
     cfg = load_config(args.config, _parse_set(args.set))
-    out = run_benchmark(cfg, args.dataset, args.split, args.limit, args.name)
+    out = run_benchmark(cfg, args.dataset, args.split, args.limit, args.name,
+                        parakeet_model=args.parakeet_model)
     print((out / "REPORT.md").read_text(encoding="utf-8").split("## Worst")[0])
     log.info("Results in %s", out)
     return 0
@@ -218,6 +219,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Common Voice split: dev while trying changes, test to confirm (FLEURS: always test)")
     bm.add_argument("--limit", type=int, help="seeded random subset of N clips (same clips every time)")
     bm.add_argument("--name", help="output folder name under runs/benchmarks/")
+    bm.add_argument("--parakeet-model", type=Path, help="compare using a local Parakeet TDT v3 instead of Cohere")
     bm.add_argument("--set", action="append", help="config override, e.g. asr.num_beams=1")
     bm.set_defaults(func=cmd_benchmark)
 

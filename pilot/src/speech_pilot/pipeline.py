@@ -293,7 +293,8 @@ class PilotRun:
             provider.unload()
         mon.after_unload(baseline)
         rows = [{"id": u.id, "start": round(u.start, 3), "end": round(u.end, 3), "speaker_hint": u.speaker_hint,
-                 "text": o.text, "n_tokens": len(o.tokens), "tokens": o.tokens} for u, o in zip(units, outputs)]
+                 "text": o.text, "n_tokens": len(o.tokens), "tokens": o.tokens,
+                 "generation": o.generation} for u, o in zip(units, outputs)]
         _dump(d / "asr_raw.json", {"model": model_info.model_dump(), "decoding": decoding,
                                    "segmentation": self.cfg.asr.segmentation, "unit_stats": unit_stats,
                                    "units": rows})
@@ -441,11 +442,13 @@ class PilotRun:
         if self._cached(step):
             return [Segment(**s) for s in _load(d / "segments_flagged.json")]
         tokens = {r["id"]: r["n_tokens"] for r in rows}
+        generation = {r["id"]: r.get("generation", {}) for r in rows}
         counts: dict[str, int] = {}
         for seg in segments:
             # In aligned mode several segments share one ASR unit; truncation is a property of the unit.
             seg.flags = flag_segment(seg, self.cfg.qc, self.cfg.asr.max_new_tokens, tokens[seg.provenance.asr_unit_id],
-                                     min_word_score=self.cfg.alignment.min_word_score)
+                                     min_word_score=self.cfg.alignment.min_word_score,
+                                     truncated=generation[seg.provenance.asr_unit_id].get("truncated"))
             for f in seg.flags:
                 counts[f.code] = counts.get(f.code, 0) + 1
         _dump(d / "segments_flagged.json", [s.model_dump() for s in segments])

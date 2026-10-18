@@ -130,6 +130,73 @@ Try changes on `dev`, confirm on `test`. `benchmark-compare` reports the differe
 only says "better"/"worse" when it is significant. Baselines: CV dev **8.92%**, CV test **9.77%**, FLEURS
 **7.42%** WER. Details: [Benchmarks wiki page](../docs/wiki/Benchmarks.md).
 
+## Comparing a second recognizer
+
+Cohere remains the production recognizer. Parakeet TDT v3 is a separate comparison provider using
+the installed Transformers library, without NeMo or changes to web uploads. Both recognizers receive
+identical 16 kHz audio units and use the same Greek scoring normalizers. Parakeet runs in FP32, batch
+size 1, and detects language automatically; Cohere keeps the configured BF16/beam decoding and language.
+
+Download once (about 2.5 GB, ignored under `models/`):
+
+```bash
+# From pilot/
+uv run hf download nvidia/parakeet-tdt-0.6b-v3 \
+    config.json generation_config.json processor_config.json \
+    tokenizer.json tokenizer_config.json model.safetensors \
+    --local-dir ../models/parakeet-tdt-0.6b-v3
+```
+
+NVIDIA publishes this model under CC BY 4.0:
+[model card](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3).
+
+Compare on an existing human-reference excerpt:
+
+```bash
+uv run python scripts/compare_asr_decoding.py --run runs/final-v2 \
+    --parakeet-model ../models/parakeet-tdt-0.6b-v3
+```
+
+New `runs/decoding-<timestamp>/comparison.json` and `alternatives.md` contain scores, model revisions,
+candidate outputs and alternatives per audio unit. The original run and reference are read only.
+The reference text is never passed to a recognizer. This previously inspected excerpt is development
+data, not held-out evidence of improved accuracy. Raw and final-sigma-normalized scores are separate.
+
+For a larger paired development comparison, use matching dataset/split/seed/limit and new output names:
+
+```bash
+uv run speech-pilot benchmark --dataset cv --split dev --limit 100 --name cohere-dev-100
+uv run speech-pilot benchmark --dataset cv --split dev --limit 100 --name parakeet-dev-100 \
+    --parakeet-model ../models/parakeet-tdt-0.6b-v3
+uv run speech-pilot benchmark-compare runs/benchmarks/cohere-dev-100 runs/benchmarks/parakeet-dev-100
+```
+
+See D-22 in `DECISIONS.md` for the measured comparison and limitations. Confirm future changes on an
+untouched test set or independent recordings before changing production defaults.
+
+### Cohere decoding safeguards and experiment
+
+Output token counts now exclude EOS and batch padding. Generation that exhausts its token budget
+can retry once with `asr.retry_max_new_tokens` (default 512), bounded by decoder capacity. Retries use
+one unit; CUDA OOM retains the first-pass output and logs the failure. Both attempts are recorded in
+`05_asr/asr_raw.json` under each unit's `generation` field; QC uses the actual final stop condition.
+This handles token-limited output, not other causes of missing speech. Disable with
+`--set asr.retry_truncated=false`.
+
+Experimental consensus selection chooses an existing beam candidate using normalized word edit
+distance. It does not synthesize replacement wording or estimate calibrated confidence. It is **off by
+default because it is measured worse**: on the full Common Voice dev split WER rises from 8.92% to 9.50%
+(+0.57 points, 95% CI +0.31 to +0.86), mostly by choosing shorter candidates (DECISIONS D-23). Use it only
+for experiments:
+
+```bash
+uv run speech-pilot run --run-id consensus-experiment \
+    --set asr.num_candidates=4 --set asr.candidate_selection=consensus
+```
+
+Candidate count cannot exceed beam count. Old saved runs remain readable. Use a new run ID for
+comparisons rather than modifying a reference deliverable.
+
 ## Outputs (`runs/<run_id>/`)
 
 | File | Content |

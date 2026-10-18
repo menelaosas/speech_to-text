@@ -78,3 +78,12 @@ count if known, and approval before anything beyond the pilot. Stretch steps A/B
 - [x] `speech-pilot benchmark` / `benchmark-compare` (D-21); `pyarrow` pinned; 38 tests pass.
 - [x] Baselines: CV dev 8.92%, CV test 9.77%, FLEURS 7.42% WER; beam search confirmed significant.
 
+
+## Review of the operator's D-22 changes (2026-10-18)
+
+- [x] Code reviewed; 47 tests pass. Defaults are output-neutral: CV dev identical (8.92%), full-file
+      transcript identical to `pilot-final` (671/671 segments).
+- [x] Kept: correct token counts, truncation retry (never triggered: 0/191 units), QC stop condition,
+      config validation, Parakeet comparison provider.
+- [x] Consensus selection measured on the full CV dev split: worse (8.92% → 9.50% WER, significant).
+      Kept in the code, **off** by default (D-23).

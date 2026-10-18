@@ -42,7 +42,7 @@ def repetition(text: str, min_repeats: int) -> str | None:
 
 
 def flag_segment(seg: Segment, cfg: QcCfg, max_new_tokens: int, n_tokens: int,
-                 min_word_score: float | None = None) -> list[Flag]:
+                 min_word_score: float | None = None, truncated: bool | None = None) -> list[Flag]:
     flags: list[Flag] = []
     words = len(_WORD.findall(seg.text))
     duration = seg.end - seg.start
@@ -69,9 +69,10 @@ def flag_segment(seg: Segment, cfg: QcCfg, max_new_tokens: int, n_tokens: int,
     if speech >= cfg.empty_min_speech_s and words <= 1:
         flags.append(Flag(code="empty_output", severity="warning",
                           detail=f"{words} words for {speech:.1f}s of speech"))
-    if n_tokens >= max_new_tokens:
+    if truncated is True or (truncated is None and n_tokens >= max_new_tokens):
         flags.append(Flag(code="possible_truncation", severity="warning",
-                          detail=f"generation hit max_new_tokens={max_new_tokens}"))
+                          detail=("generation exhausted its token budget without an end-of-sequence token"
+                                  if truncated is not None else f"generation hit max_new_tokens={max_new_tokens}")))
     if seg.words and min_word_score is not None:
         aligned = [w.score for w in seg.words if w.aligned]
         mean = sum(aligned) / len(aligned) if aligned else 0.0

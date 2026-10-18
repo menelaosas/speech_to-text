@@ -82,6 +82,7 @@ Cohere Transcribe `d552dadc`, BF16, 4 beams, ς layer with adaptive margin.
 | `baseline-cv-test` | **9.77%** | 9.06–10.51 | 10.09% | 2.74% | 40 s |
 | `baseline-fleurs-test` | **7.42%** | 6.84–8.00 | 7.41% | 2.51% | 52 s |
 | `greedy-cv-dev` (`asr.num_beams=1`) | 9.18% | 8.46–9.95 | 9.40% | 2.54% | 26 s |
+| `review-consensus-cv-dev` (4 candidates, consensus) | 9.50% | 8.80–10.23 | 9.70% | 2.58% | 36 s |
 
 First findings:
 
@@ -92,6 +93,12 @@ First findings:
   model drops ς, the layer is the largest gain measured (WER 42.0% → 37.0%). A candidate improvement is to
   skip the layer when the raw text already has a normal ς rate. That can be tested with
   `--set normalization.greek_final_sigma=false` and compared.
+
+- **Consensus selection is worse** (D-23): choosing the candidate that agrees most with the other 3
+  beam candidates raised WER from 8.92% to 9.50% (+0.57 points, 95% CI +0.31 to +0.86). It picks shorter
+  candidates (deletions 105 → 153). It stays off; the default (top-ranked candidate) is more accurate.
+- **The D-22 code changes are output-neutral with defaults:** re-running dev with the new code gave the
+  identical 8.92% on all 1,841 clips.
 
 ## Caveats
 

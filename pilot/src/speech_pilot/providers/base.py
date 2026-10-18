@@ -68,6 +68,7 @@ class AsrOutput:
     unit_id: str
     text: str
     tokens: list[int]
+    generation: dict = field(default_factory=dict)
 
 
 class ASRProvider(Provider):

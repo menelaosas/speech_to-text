@@ -199,3 +199,94 @@ excludes zero). Rule: iterate on `dev`, confirm on `test`.
   when the raw ς rate is normal.
 - Caveats: read speech, not meetings; Cohere's training data is undisclosed, so absolute CV scores may be
   optimistic. Comparisons between variants remain valid.
+
+## D-22 Second-model comparison and decoding safeguards (2026-10-18)
+
+Operator selected comparison with a second model. Downloaded NVIDIA
+`nvidia/parakeet-tdt-0.6b-v3` (CC BY 4.0) into ignored `models/`; its native Transformers provider runs
+locally in FP32, batch size 1. Cohere keeps BF16, four beams, configured batches. Models are loaded
+sequentially on the 8 GB GPU. No model weights were trained, no production recognizer was replaced,
+and no original recording, reference, or saved transcript was edited.
+
+### Same meeting excerpt, matching input units
+
+`scripts/compare_asr_decoding.py` clips saved ASR unit boundaries to the 571-word human-reference
+window. All variants receive the same nine audio units; reference text is used only after recognition.
+This differs from extracting words from a full-file run, so these scores must not be compared as
+before/after improvements against the previous 37.0% full-run result.
+
+| Variant | WER raw | CER raw | WER final-sigma layer | CER final-sigma layer |
+| --- | --- | --- | --- | --- |
+| Cohere, best beam | 42.7% | 22.7% | 37.6% | 21.7% |
+| Cohere, experimental four-candidate consensus | 42.2% | 22.4% | 37.1% | 21.4% |
+| Parakeet TDT v3 | 49.2% | 29.1% | 45.2% | 28.4% |
+
+Artifacts: `runs/decoding-20261017-204055/comparison.json` and `alternatives.md`.
+This is a previously inspected development excerpt, not a held-out test. Consensus changes only a
+few errors; the gain is too small to justify adoption from this excerpt alone. Parakeet is worse here.
+
+### Matching 100-clip Common Voice dev sample
+
+Same seeded sample, 652 reference words, independent of the meeting excerpt:
+
+| Model | WER raw | CER raw | WER final-sigma layer | CER final-sigma layer |
+| --- | --- | --- | --- | --- |
+| Cohere | 9.82% | 2.66% | 9.97% | 2.69% |
+| Parakeet | 18.87% | 4.45% | 10.28% | 2.96% |
+
+Paired raw WER difference (Parakeet minus Cohere): +9.05 percentage points, bootstrap 95% interval
+[+4.86, +13.49]. After the same sigma layer, the difference is +0.31 points, interval [-3.18, +3.55]:
+no significant difference on this sample. Both raw and normalized scores are retained; the sigma
+layer removes much of Parakeet's raw error here. This is a small read-speech dev sample, not evidence
+that either model generalizes better to all Greek meetings; public-data training overlap is unknown.
+
+Artifacts: `runs/benchmarks/cv-dev-n100-{cohere,parakeet}-20261018-002823/` and
+`runs/benchmarks/cohere-parakeet-20261018-002823.json`.
+
+Decision: keep Cohere as the production recognizer and consensus opt-in. Keep Parakeet as an explicit
+comparison option in `benchmark --parakeet-model ...` and the reference comparison script.
+
+### Correct stop detection and targeted recovery
+
+Cohere now excludes EOS and padding from token counts and records the actual generation stop
+condition. Before this change, 140 of the 191 full-file ASR rows included padding in `n_tokens`.
+The examined run had no units at the 256-token limit, so token-limit recovery cannot explain or fix
+its existing word errors. When a future unit really exhausts its budget without EOS, it can retry
+once at up to 512 tokens, within decoder capacity, with one unit per retry. OOM or an empty retry
+retains the first pass. Both attempts and beam candidates are kept in `asr_raw.json`; QC uses the
+final stop condition, including for segments sharing a recovered ASR unit. Old runs without these
+fields keep the legacy QC fallback. The new ASR config fields invalidate downstream caches normally.
+
+## D-23 Review of the D-22 changes: kept; consensus stays off (2026-10-18)
+The D-22 changes were reviewed and measured on the full Common Voice dev split (1,841 clips) and the full
+78-minute recording before committing.
+
+**No regressions with the defaults** (`num_candidates: 1`, `candidate_selection: best`):
+
+- Common Voice dev, new code vs `baseline-cv-dev` (old code): identical on all 1,841 clips (WER 8.92%).
+- Full pipeline re-run with diarization reused from `pilot-final`: identical, 671 of 671 segments.
+- 47 tests pass.
+
+**Kept, enabled:** token counts without EOS/padding (all 191 units previously included padding; the
+largest real count is 202 of the 256 budget); retry of truncated generation (0 of 191 units were
+truncated, so it never ran on this recording); QC on the real stop condition; config validation.
+None of these changes WER/CER; they make counts and flags correct and add a safety net.
+
+**Kept, comparison only:** Parakeet TDT v3 (worse than Cohere in D-22).
+
+**Consensus selection: kept in the code, off by default.** On the full dev split it is significantly worse:
+
+| Selection | WER raw (95% CI) | CER raw | Deletions |
+| --- | --- | --- | --- |
+| best beam (default) | 8.92% (8.24–9.66) | 2.45% | 105 |
+| consensus, 4 candidates | 9.50% (8.80–10.23) | 2.58% | 153 |
+
+Paired difference +0.57 points WER, 95% CI [+0.31, +0.86]; better on 34 clips, worse on 71. The small
+gain seen on 100 clips and on the meeting excerpt (D-22) did not hold. Cause: of 124 clips where the choice
+changed, 67 picked a shorter candidate and 10 a longer one, so deletions rose. Two reasons in
+`select_candidate`: (1) edit distance is divided by the *other* candidate's length, so long candidates
+receive larger penalties; (2) every distinct candidate has an equal vote, ignoring the model's own
+beam scores. It stays available for experiments (`--set asr.num_candidates=4 --set
+asr.candidate_selection=consensus`), and may become a default only if a corrected version (symmetric
+normalisation, score-weighted votes) beats 8.92% on dev and is confirmed on test.
+Data: `runs/benchmarks/review-{default,consensus}-cv-dev/`, `runs/review-pipeline/`.

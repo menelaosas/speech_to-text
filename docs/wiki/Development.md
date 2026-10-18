@@ -35,7 +35,7 @@ uv run speech-to-text transcribe /tmp/sample.m4a -o /tmp/out -f txt
 
 ## Pilot (`pilot/`)
 
-Separate uv project, Python 3.12, exact pins. 38 tests (no models needed):
+Separate uv project, Python 3.12, exact pins. 47 tests (no models needed):
 
 ```bash
 cd pilot && uv run pytest
@@ -48,6 +48,7 @@ cd pilot && uv run pytest
 | `tests/test_qc_export.py` | quality flags, TXT/SRT/RTTM formats, schema round trip |
 | `tests/test_greek_text.py` | scoring normaliser, Greek number verbaliser, reference import |
 | `tests/test_cache.py` | an upstream change invalidates downstream steps |
+| `tests/test_asr_decoding.py` | stop detection without padding, truncation retry (and its fallbacks), candidate selection, config validation, Parakeet comparison provider |
 | `tests/test_benchmark.py` | benchmark scoring (Greek normaliser), seeded subsets, Common Voice loading, paired comparison verdicts |
 | `tests/test_web.py` | Speech Studio: save/reopen/export, audio ranges, uploads, host/origin checks, edit validation, import |
 
