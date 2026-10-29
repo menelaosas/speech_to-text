@@ -140,8 +140,11 @@ function renderJobs() {
     $('jobs').append(empty);
   }
   for (const job of jobs) {
+    // A row holds two sibling buttons (open, delete): a button must not contain another button.
+    const row = document.createElement('div');
+    row.className = `job-row${current === job.id ? ' selected' : ''}`;
     const button = document.createElement('button');
-    button.className = `job${current === job.id ? ' selected' : ''}`;
+    button.className = 'job';
     if (current === job.id) button.setAttribute('aria-current', 'page');
     const name = document.createElement('strong'); name.textContent = job.name; name.title = job.name;
     const [text, kind] = statusText(job);
@@ -151,8 +154,24 @@ function renderJobs() {
     meta.append(badge, ` · ${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`);
     button.append(name, meta);
     button.onclick = () => openJob(job.id).catch(error => notice(error.message));
-    $('jobs').append(button);
+    row.append(button);
+    if (deletable(job)) {
+      const remove = trashButton(`Delete “${job.name}”`);
+      remove.className += ' job-delete';
+      remove.onclick = event => { event.stopPropagation(); deleteJob(job.id); };
+      row.append(remove);
+    }
+    $('jobs').append(row);
   }
+}
+// Queued or processing recordings cannot be deleted (the server refuses until the pipeline finishes).
+function deletable(job) { return job.status === 'ready' || job.status === 'failed'; }
+function trashButton(label) {
+  const button = document.createElement('button');
+  button.type = 'button'; button.className = 'icon-button danger';
+  button.title = label; button.setAttribute('aria-label', label);
+  button.append($('trash-icon').content.cloneNode(true));
+  return button;
 }
 async function refreshJobs() { jobs = await api('/api/jobs'); renderJobs(); }
 $('new').onclick = async () => {
@@ -200,20 +219,28 @@ $('retry').onclick = async () => {
   try { const job = await api(`/api/jobs/${current}/retry`, {method: 'POST'}); await refreshJobs(); processing(job); }
   catch (error) { notice(error.message); }
 };
-async function deleteCurrent() {
-  const job = jobs.find(j => j.id === current);
+async function deleteJob(id) {
+  const job = jobs.find(j => j.id === id);
   if (!job) return;
+  if (!deletable(job)) return notice('Wait until processing finishes before deleting this recording.', 'info');
+  const isOpen = id === current;
+  const unsaved = isOpen && dirty ? ' Your unsaved corrections will be lost too.' : '';
   const ok = await confirmDialog('Delete this recording?',
-    `“${job.name}” will be removed from this workspace: the uploaded copy, the transcript and all saved versions. This cannot be undone.`, 'Delete');
+    `“${job.name}” will be removed from this workspace: the uploaded audio file, its transcript and all saved `
+    + `versions. This cannot be undone.${unsaved}`, 'Delete recording');
   if (!ok) return;
   try {
-    await api(`/api/jobs/${current}/delete`, {method: 'POST'});
-    setDirty(false); current = null; documentData = null; audio.pause(); audio.removeAttribute('src');
-    resetUpload(); show('welcome'); jobsSignature = ''; await refreshJobs(); notice('Recording deleted.', 'info');
+    await api(`/api/jobs/${id}/delete`, {method: 'POST'});
+    if (isOpen) {
+      setDirty(false); current = null; documentData = null; audio.pause(); audio.removeAttribute('src');
+      document.title = 'Speech Studio · Listen, review, refine';
+      resetUpload(); show('welcome');
+    }
+    jobsSignature = ''; await refreshJobs(); notice(`“${job.name}” deleted.`, 'info');
   } catch (error) { notice(error.message); }
 }
-$('delete-failed').onclick = deleteCurrent;
-$('delete-ready').onclick = deleteCurrent;
+$('delete-failed').onclick = () => deleteJob(current);
+$('delete-ready').onclick = () => deleteJob(current);
 
 // ---- editor ------------------------------------------------------------------------------------------------
 async function openJob(id) {

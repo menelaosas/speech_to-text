@@ -73,6 +73,9 @@ The server binds to this computer's loopback interface. Keep the terminal runnin
    *machine transcript* (as produced, no corrections) or *your saved version* in TXT, SRT or JSON. JSON
    contains the original transcript and the separate corrections. Saved corrections and the latest
    version reopen when you select that recording again. Leaving with unsaved corrections asks first.
+8. **Delete a recording:** hover it in the sidebar and click its 🗑 icon, or use **Delete** in the editor
+   header. After a confirmation, the uploaded audio file, transcript and saved versions are removed from
+   `.web-data` (files elsewhere on the computer are never touched). Not available while processing.
 
 Keyboard: `Space` play/pause · `←`/`→` 5 s · `/` search · `Ctrl`/`⌘`+`S` save · `Enter` edit the
 focused word, `←`/`→` move between words of a segment.

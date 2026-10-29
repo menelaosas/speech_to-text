@@ -56,6 +56,7 @@
       <div class="save-group">
         <span id="save-state" role="status">Original transcript</span>
         <div class="save-row">
+          <button id="delete-ready" class="quiet danger with-icon" type="button" title="Delete this recording and its uploaded file"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Delete</button>
           <details class="menu" id="download-menu">
             <summary class="quiet">Download ▾</summary>
             <div class="menu-panel">
@@ -104,12 +105,13 @@
     <datalist id="speaker-names"></datalist>
     <div id="transcript"></div>
     <p id="empty-results" class="empty" hidden>No segments match your filters.</p>
-    <div class="editor-foot"><button id="delete-ready" class="quiet danger">Delete this recording…</button></div>
   </section>
 
   <div id="notice" role="alert" hidden><span id="notice-text"></span><button id="notice-close" class="close" aria-label="Dismiss">✕</button></div>
   <footer><span>SPEECH STUDIO</span><span>A little closer to what was said.</span></footer>
 </main>
+
+<template id="trash-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></template>
 
 <dialog id="word-dialog" aria-labelledby="word-title">
   <form method="dialog" id="word-form">
